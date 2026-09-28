@@ -52,7 +52,8 @@ steps=3  input=5,210 tokens (cache hit 3,072)  output=412 tokens  cost≈$0.0009
 │   ├── tools.py
 │   ├── context.py
 │   ├── agent.py
-│   └── main.py
+│   ├── main.py
+│   └── ablate.py         # 消融实验脚本（第 7 节第 9 步），不属于 agent 本身
 └── tests/
     ├── test_tools.py
     └── test_agent.py
@@ -164,8 +165,12 @@ class Tools:
 4. 每个工具输出最多 12,000 个字符，超出截断并注明。
 5. 没有任何写文件、删文件或执行命令的代码。
 
-另有一个**不给模型调用**的方法 `overview()`：运行开始时生成深度不超过 3 层的目录树（目录以 `/` 结尾，每个目录最多 20 项，超出写 `…(+N)`，总长不超过 4,000 字符），
-遵守同样的安全规则。它对应 M1 ContextEngine 的 ORIENT 里“目录树”那一项，其余几项（README、清单文件、符号大纲）暂不做。
+另有一个**不给模型调用**的方法 `overview(mode)`，对应 M1 ContextEngine 的 ORIENT，运行开始时放进第一条用户消息：
+- `"tree"`：深度不超过 3 层的目录树（目录以 `/` 结尾，每个目录最多 20 项，超出写 `…(+N)`，最多 4,000 字符）。
+- `"full"`（默认）：目录树，加上根目录下存在的 `AGENTS.md`（没有则 `CLAUDE.md`）前 40 行、`README.md` 前 60 行、
+  清单文件（`pyproject.toml`、`package.json`、`go.mod`、`Cargo.toml`）前 40 行；每段最多 3,000 字符。
+- `"none"`：空字符串，只用于消融实验。
+遵守和工具相同的安全规则。M1 ORIENT 里的符号大纲和测试布局暂不做。
 加它的原因见 `docs/Runs.md` 第 3 轮：没有概览时，模型问“入口在哪”只能逐层 `list_dir`，撞上步数上限。
 
 ### 5.3 `context.py`（约 60 行）— 对应 M1 的 ContextEngine
@@ -206,6 +211,11 @@ def run(question: str, llm, tools: Tools, repo_name: str,
 
 - 循环见第 4 节。模型一次返回多个 tool call 时依次全部执行。
 - “步”按模型调用计数（`max_steps` 限制的是模型调用次数）；打印按工具调用逐条打，同一次模型调用里的多个工具调用共用一个步号。
+- 重复调用：同一次运行里，工具名和参数都和之前某次完全相同、而且那次结果还没被 `trim` 省略时，不再执行，
+  直接回一条 `NOTE:` 提示“结果就在上文”，这一步照样计数、打印时标注“重复”。结果已被省略时照常执行。
+  原因见 `docs/Runs.md` 第 4 轮：同一个空目录被 `list_dir` 了 3 次。
+- `Settings`（冻结的 dataclass）集中放消融实验的开关：`overview`（full/tree/none）、`dedup`、`strict_prompt`
+  （是否加第 5 步那两条“只对读到的内容下结论、不描述检查过程”的规则）。默认值就是正常配置。
 - 未知工具名或参数不是合法 JSON：把 `ERROR:` 结果回给模型，算一步，不中断。
 - 达到 `max_steps` 后，追加一条用户消息“请根据已获得的信息直接回答”，再调用一次模型，这次 `tools` 照传但 `tool_choice="none"`（不改工具集，前缀不变，缓存仍能命中），结果作为最终回答，`stopped_by = "max_steps"`。
 - `on_step` 回调负责打印，便于测试时替换成收集列表。
@@ -218,6 +228,18 @@ python -m mini_agent "问题" [--repo 路径，默认当前目录] [--max-steps 
 
 - 读取 `DEEPSEEK_API_KEY`，缺失时打印如何设置并以退出码 2 结束。
 - 打印每一步、最终回答，以及最后一行用量汇总（步数、输入 token 及缓存命中、输出 token、估算费用）。
+
+### 5.6 `ablate.py` — 消融实验（不属于 agent）
+
+```text
+python -m mini_agent.ablate --repo 路径 "问题1" "问题2" ... [--repeat 2] [--workers 4]
+```
+
+- 配置：`full`（全部开启）、`tree_only`、`no_overview`、`no_dedup`、`loose_prompt`，每次只去掉一个组件。
+- 每个“配置 × 问题 × 重复”跑一次 `agent.run`，记录模型调用次数、工具调用次数（其中 list_dir、重复调用）、
+  token、缓存命中、费用、是否撞上 max_steps，以及回答里 `路径:行号` 引用的程序化核对结果（文件是否存在、行号是否在范围内）。
+- 明细写到 `runs/ablation-时间.json`（`runs/` 不进仓库），终端打印按配置汇总的表格；分析写进 `docs/Runs.md`。
+- 程序化核对只能发现“引用不存在”，发现不了“结论错误”（见 `docs/Runs.md` 第 1 轮），所以回答质量仍要人工抽查。
 
 ## 6. 测试
 
@@ -245,6 +267,9 @@ python -m mini_agent "问题" [--repo 路径，默认当前目录] [--max-steps 
 | 4 | `context.py`，`main.py` 接上完整循环和用量汇总 | 对 mini-agent 自己问一个问题并得到带行号的回答 |
 | 5 | 用第 1.1 节的 3 类问题试跑（可用 `--repo ../MultiAgentOS` 作为只读提问对象），记录到 `docs/Runs.md`，根据结果调整提示词 | 3 个问题都有带引用的回答 |
 | 6 | 仓库概览：`Tools.overview()` 生成浅层目录树，`context.initial` 把它放进第一条用户消息（见 5.2、5.3） | 在 MultiAgentOS 上重问“入口在哪”，对比第 3 轮的步数和费用，记录到 `docs/Runs.md` |
+| 7 | 重复调用检测 + `Settings` 开关 | `pytest` 通过 |
+| 8 | 完善 ORIENT：概览加入 AGENTS.md/CLAUDE.md、README、清单文件 | `pytest` 通过 |
+| 9 | `ablate.py` 消融实验：在 MultiAgentOS 上跑 5 种配置，分析写进 `docs/Runs.md` | 能说出每个组件对步数、费用、引用质量的影响 |
 
 预计总量：代码约 420 行，测试约 150 行。
 
@@ -289,7 +314,6 @@ Harness 指包在模型外面、让它能可靠干活的那层程序。模型本
 - 结构化的最终回答（JSON 格式、引用列表校验）
 - 程序化核对回答里引用的 `路径:行号` 确实存在、内容相关（最便宜的独立 Evaluator，代替让模型自评）
 - 用模型生成的摘要代替 `trim` 的占位符（真正的 compaction），对比两种做法的回答质量和费用
-- 消融实验：一次去掉一个组件（例如 trim、提示词里的某条规则），在同一组问题上对比 `docs/Runs.md` 的结果，看哪些组件真正起作用
 - 检测“连续几步没有新信息”并提前停止
 - 更好的搜索（按文件名、按符号、结果排序）
 - 开启 thinking 模式后的效果和费用对比
