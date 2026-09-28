@@ -20,7 +20,7 @@ REPEAT_NOTE = "NOTE: 这个调用和前面某次完全相同，结果就在上�
 @dataclass(frozen=True)
 class Settings:
     """消融实验的开关；默认值就是正常运行的配置。frozen=True 让它可以安全地当默认参数。"""
-    overview: str = "tree"  # "tree" | "none"
+    overview: str = "full"  # "full" | "tree" | "none"
     dedup: bool = True  # 跳过和之前完全相同的工具调用
     strict_prompt: bool = True  # 系统提示词是否包含 STRICT_RULES
 

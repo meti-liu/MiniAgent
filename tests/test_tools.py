@@ -91,8 +91,8 @@ def test_specs_describe_three_tools(repo):
 
 def test_overview_lists_tree_and_skips_hidden(repo):
     (repo / "src" / "deep" / "deeper" / "deepest").mkdir(parents=True)
-    out = Tools(repo).overview()
-    assert out.splitlines() == [
+    out = Tools(repo).overview("tree")
+    assert out.splitlines()[1:] == [
         "README.md",
         "src/",
         "  app.py",
@@ -104,10 +104,22 @@ def test_overview_lists_tree_and_skips_hidden(repo):
 def test_overview_caps_entries_per_dir(repo):
     for i in range(25):
         (repo / "src" / f"m{i:02d}.py").write_text("", encoding="utf-8")
-    lines = Tools(repo).overview().splitlines()
+    lines = Tools(repo).overview("tree").splitlines()
     assert "  …(+6)" in lines  # src 里共 26 项，只列 20 项
 
 
 def test_overview_none_is_empty(repo):
     assert Tools(repo).overview("none") == ""
+
+
+def test_full_overview_adds_readme_and_manifest_heads(repo):
+    (repo / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
+    (repo / "CLAUDE.md").write_text("claude notes\n", encoding="utf-8")
+    (repo / "AGENTS.md").write_text("agent notes\n", encoding="utf-8")
+    out = Tools(repo).overview()
+    assert "【README.md，前 2 行，共 2 行】\n# demo\nhello world" in out
+    assert "【pyproject.toml，前 2 行，共 2 行】\n[project]" in out
+    assert "agent notes" in out and "claude notes" not in out  # 只取 AGENTS.md
+    assert "【目录树" not in Tools(repo).overview("none")
+    assert "【README.md" not in Tools(repo).overview("tree")
 

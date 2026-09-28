@@ -1,6 +1,6 @@
 """上下文：决定每次放进模型“眼里”的是什么（对应 M1 的 ContextEngine）。
 
-SYSTEM_PROMPT 一字不变，保证每次调用的开头相同、能命中缓存；会变的仓库名、目录概览和问题放进第一条用户消息。
+SYSTEM_PROMPT 一字不变，保证每次调用的开头相同、能命中缓存；会变的仓库名、仓库概览和问题放进第一条用户消息。
 trim 在总长度超限时，把最早的工具结果换成占位符，控制上下文长度。
 """
 
@@ -36,7 +36,7 @@ def initial(question: str, repo_name: str, overview: str = "", strict: bool = Tr
     # 顺序：仓库名 → 目录概览 → 问题。同一仓库的概览相同，放在问题前面，换问题时这段也能命中缓存
     parts = [f"仓库：{repo_name}"]
     if overview:
-        parts.append(f"目录概览（深度 ≤3，每个目录最多 20 项）：\n{overview}")
+        parts.append(f"仓库概览：\n\n{overview}")
     parts.append(f"问题：{question}")
     return [
         {"role": "system", "content": SYSTEM_PROMPT if strict else BASE_PROMPT},

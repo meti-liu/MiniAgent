@@ -19,6 +19,10 @@ MAX_LINES = 200
 OVERVIEW_DEPTH = 3
 OVERVIEW_PER_DIR = 20
 OVERVIEW_MAX_CHARS = 4_000
+OVERVIEW_SECTION_CHARS = 3_000
+# 概览里附上的根目录文件及行数；AGENTS.md 和 CLAUDE.md 只取其一
+OVERVIEW_FILES = [("AGENTS.md", 40), ("CLAUDE.md", 40), ("README.md", 60), ("pyproject.toml", 40),
+                  ("package.json", 40), ("go.mod", 40), ("Cargo.toml", 40)]
 
 
 class ToolError(Exception):
@@ -162,9 +166,33 @@ class Tools:
 
     # ---- 仓库概览：运行开始时放进第一条用户消息，不在 specs() 里，模型不能调用 ----
 
-    def overview(self, mode: str = "tree") -> str:
-        """对应 M1 的 ORIENT。mode="none" 返回空字符串，只用于消融实验。"""
-        return "" if mode == "none" else self._tree()
+    def overview(self, mode: str = "full") -> str:
+        """对应 M1 的 ORIENT。full = 目录树 + 根目录的说明和清单文件开头；tree = 只有目录树；none = 空。"""
+        if mode == "none":
+            return ""
+        sections = [f"【目录树，深度 ≤{OVERVIEW_DEPTH}，每个目录最多 {OVERVIEW_PER_DIR} 项】\n{self._tree()}"]
+        if mode == "full":
+            sections += self._head_sections()
+        return "\n\n".join(sections)
+
+    def _head_sections(self) -> list[str]:
+        """根目录下存在的说明文件和清单文件，各取前几行。"""
+        sections = []
+        for name, max_lines in OVERVIEW_FILES:
+            if name == "CLAUDE.md" and (self.root / "AGENTS.md").is_file():
+                continue  # 有 AGENTS.md 就不再放 CLAUDE.md
+            try:
+                target = self._resolve(name)
+                if not target.is_file():
+                    continue
+                lines = self._read_text(target).splitlines()
+            except ToolError:
+                continue  # 被跳过、太大或不是文本
+            body = "\n".join(lines[:max_lines])[:OVERVIEW_SECTION_CHARS]
+            shown = min(max_lines, len(lines))
+            # 用【】而不是 ##，避免和 README 里自己的标题混在一起
+            sections.append(f"【{name}，前 {shown} 行，共 {len(lines)} 行】\n{body}")
+        return sections
 
     def _tree(self) -> str:
         """深度不超过 OVERVIEW_DEPTH 的目录树。"""
