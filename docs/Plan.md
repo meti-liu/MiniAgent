@@ -83,7 +83,7 @@ agent.py     messages = context.initial(question)
   │                  result = tools.run(call.name, call.args)  ← 执行工具
   │                  messages.append(tool 结果消息)
   │              messages = context.trim(messages)             ← 控制长度
-  │          超过步数：让模型基于已有信息作答（不再给工具）
+  │          超过步数：让模型基于已有信息作答（tools 照传，tool_choice="none"）
   │
 llm.py       POST https://api.deepseek.com/chat/completions，累计 usage 和费用
 tools.py     list_dir / search / read_file，全部限制在 --repo 目录内
@@ -124,13 +124,14 @@ class Usage:
 class LLMClient:
     def __init__(self, api_key: str, model: str = "deepseek-flash",
                  base_url: str = "https://api.deepseek.com", timeout: float = 60): ...
-    def chat(self, messages: list[dict], tools: list[dict] | None) -> Reply: ...
+    def chat(self, messages: list[dict], tools: list[dict] | None = None,
+             tool_choice: str = "auto") -> Reply: ...
     usage: Usage
 ```
 
 要点：
 
-- 请求体：`model`、`messages`、`tools`、`tool_choice: "auto"`、`thinking: {"type": "disabled"}`、`max_tokens: 2000`。
+- 请求体：`model`、`messages`、`tools`、`tool_choice`（默认 `"auto"`）、`thinking: {"type": "disabled"}`、`max_tokens: 2000`。
 - 从响应的 `usage.prompt_cache_hit_tokens`、`prompt_cache_miss_tokens`、`completion_tokens` 累计用量。
 - 费用按非高峰价估算（美元 / 百万 token：缓存命中 0.003、未命中 0.15、输出 0.60）。
   UTC 周一至周五 01:00–04:00、06:00–10:00 为高峰，价格 ×2；每次调用结束时按当时时刻算出本次费用，累加到 `usage.cost_usd`，不处理节假日。
@@ -173,6 +174,7 @@ def trim(messages: list[dict], max_chars: int = 60_000) -> list[dict]: ...
 
 - 系统提示词写清楚：只能用工具获取信息；先搜索再读；回答必须引用 `路径:起始行-结束行`；信息不足时明确说出来。
   提示词保持固定不变，这样每次调用的开头相同，可以命中 DeepSeek 的缓存（这就是 M1 里“稳定前缀”的由来）。
+  仓库名这类会变的信息不写进系统提示词，而是和问题一起放进第一条用户消息，这样换仓库、换问题时前缀依然相同。
 - `trim`：总字符数超过上限时，从最早的 tool 结果开始，把内容替换成 `[已省略，共 N 字符]`。
   system 消息、用户问题和最近 4 条消息不动。用字符数近似 token 数，不引入分词器。
 - 注意：assistant 消息里的 `tool_calls` 和对应的 tool 消息必须成对保留，只能替换 tool 消息的内容，不能删除消息。
@@ -200,7 +202,7 @@ def run(question: str, llm, tools: Tools, repo_name: str,
 - 循环见第 4 节。模型一次返回多个 tool call 时依次全部执行。
 - “步”按模型调用计数（`max_steps` 限制的是模型调用次数）；打印按工具调用逐条打，同一次模型调用里的多个工具调用共用一个步号。
 - 未知工具名或参数不是合法 JSON：把 `ERROR:` 结果回给模型，算一步，不中断。
-- 达到 `max_steps` 后，追加一条用户消息“请根据已获得的信息直接回答”，再调用一次模型，这次不传 `tools`，结果作为最终回答，`stopped_by = "max_steps"`。
+- 达到 `max_steps` 后，追加一条用户消息“请根据已获得的信息直接回答”，再调用一次模型，这次 `tools` 照传但 `tool_choice="none"`（不改工具集，前缀不变，缓存仍能命中），结果作为最终回答，`stopped_by = "max_steps"`。
 - `on_step` 回调负责打印，便于测试时替换成收集列表。
 
 ### 5.5 `main.py`（约 50 行）— 对应 M1 的 CLI / UserInteraction
@@ -219,7 +221,7 @@ python -m mini_agent "问题" [--repo 路径，默认当前目录] [--max-steps 
 | 文件 | 用例 |
 |---|---|
 | `tests/test_tools.py` | 在 `tmp_path` 里建一个小仓库：正常列目录、搜索、读指定行；`../` 和绝对路径被拒绝；指向外部的符号链接被拒绝；`.git` 被跳过；超长输出被截断 |
-| `tests/test_agent.py` | `FakeLLM` 按预设顺序返回“调用 search → 调用 read_file → 回答”，断言工具被执行、tool 消息被追加、最终答案正确；再测一个一直调用工具的假模型，断言在 `max_steps` 后停止并做最后一次无工具调用 |
+| `tests/test_agent.py` | `FakeLLM` 按预设顺序返回“调用 search → 调用 read_file → 回答”，断言工具被执行、tool 消息被追加、最终答案正确；再测一个一直调用工具的假模型，断言在 `max_steps` 后停止，并且最后一次调用的 `tool_choice` 是 `"none"` |
 
 `FakeLLM` 就写在 `test_agent.py` 里，大约 20 行。
 
@@ -264,9 +266,9 @@ Harness 指包在模型外面、让它能可靠干活的那层程序。模型本
 | 三个只读工具，按需列目录、搜索、按行读 | 把整个仓库塞进上下文，模型会失焦（context rot） | 即时检索、渐进式披露：先看结构，再定位，最后只读需要的几行 |
 | 工具输出上限、`read_file` 每次 200 行 | 上下文是有限资源，塞得越多，每个 token 的价值越低 | 把 token 当预算来花 |
 | 出错时返回 `ERROR:` 字符串而不是抛异常 | 模型看到错误后能自己换参数重试 | 工具对错误鲁棒，错误本身就是反馈 |
-| `context.trim` 用占位符替换旧的工具结果 | 历史越长，旧的原始结果越没用 | 压缩（compaction）的最简版：丢掉冗余的工具结果，需要时让模型重新查 |
-| 固定的系统提示词 | 相同的前缀能命中缓存，也让行为稳定 | 稳定前缀 |
-| `max_steps` 和最后一次不带工具的调用 | 模型不一定会自己停下 | 硬性终止条件 |
+| `context.trim` 用占位符替换旧的工具结果 | 历史越长，旧的原始结果越没用 | 压缩（compaction）的最简版：丢掉冗余的工具结果，需要时让模型重新查。代价是改写了历史，从被改处往后缓存失效，所以只在超限时才裁剪 |
+| 固定的系统提示词和工具集，会变的信息放进用户消息 | 缓存按前缀匹配，动了底层，上面全部按全价重算 | 稳定前缀：用消息改变状态，而不是改工具集或系统提示词 |
+| `max_steps` 和最后一次 `tool_choice="none"` 的调用 | 模型不一定会自己停下 | 硬性终止条件 |
 | 回答必须引用 `路径:行号` | 模型会自信地编造，自己评估自己时会偏乐观 | 让输出可以被外部核对（真正的核对见第 9 节） |
 
 我们做这个仓库的方式本身也是一个 Harness：本规划是需求说明，第 7 节是逐项的功能清单；每步只做一件事、一个 commit、停下来让 meti 验收。
