@@ -48,6 +48,11 @@ def test_skipped_paths_are_rejected(repo):
     assert tools.run("list_dir", {"path": ".git"}).startswith("ERROR")
 
 
+def test_search_does_not_follow_links_into_skipped_files(repo):
+    (repo / "notes.txt").symlink_to(repo / ".env")
+    assert "secret" not in Tools(repo).run("search", {"pattern": "secret"})
+
+
 def test_long_output_is_truncated(repo):
     (repo / "big.txt").write_text(("x" * 100 + "\n") * 200, encoding="utf-8")
     out = Tools(repo).run("read_file", {"path": "big.txt"})

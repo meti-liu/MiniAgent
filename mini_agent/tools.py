@@ -78,11 +78,15 @@ class Tools:
     def _resolve(self, path: str) -> Path:
         """把相对路径变成绝对路径；resolve() 会展开 .. 和符号链接，所以一次检查就够。"""
         target = (self.root / path).resolve()
+        self._check(target)
+        return target
+
+    def _check(self, target: Path) -> None:
+        """target 必须已经 resolve 过：要在仓库内，且路径里没有要跳过的名字。"""
         if target != self.root and self.root not in target.parents:
             raise ToolError("outside repository")
         if any(is_skipped(part) for part in target.relative_to(self.root).parts):
             raise ToolError("path is skipped")
-        return target
 
     def _read_text(self, file: Path) -> str:
         if file.stat().st_size > MAX_FILE_BYTES:
@@ -93,7 +97,7 @@ class Tools:
             raise ToolError("file is not UTF-8 text") from None
 
     def _files_under(self, target: Path):
-        """遍历 target 下所有可读文件，跳过忽略的目录和指向仓库外的符号链接。"""
+        """遍历 target 下所有允许读的文件；符号链接按真实位置再检查一遍。"""
         if target.is_file():
             yield target
             return
@@ -101,9 +105,11 @@ class Tools:
             dirnames[:] = sorted(d for d in dirnames if not is_skipped(d))  # 原地修改 = 不进入这些目录
             for filename in sorted(filenames):
                 file = Path(folder) / filename
-                real = file.resolve()
-                if not is_skipped(filename) and self.root in real.parents:
-                    yield file
+                try:
+                    self._check(file.resolve())  # 和 _resolve 用同一套规则
+                except ToolError:
+                    continue
+                yield file
 
     # ---- 三个工具 ----
 
