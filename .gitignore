@@ -1,0 +1,10 @@
+# 密钥：.env 永远不进仓库，只保留模板 .env.example
+.env
+.env.*
+!.env.example
+
+# Python 和工具生成的文件
+__pycache__/
+.venv/
+.pytest_cache/
+.DS_Store
