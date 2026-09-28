@@ -16,7 +16,7 @@
 | | mini-agent（ts-port） | experiment/M0 |
 |---|---|---|
 | 任务 | 本地代码仓库问答，回答带 `路径:行号` | 联网搜索后写报告（示例：“武汉大学 150 字报告”） |
-| 状态 | 可运行；已在 MultiAgentOS 上跑过约 40 次真实调用 | 可编译的骨架；所有方法 `Promise.reject(NotImplementedError)` |
+| 状态 | 可运行；已在 MultiAgentOS 上真实运行约 35 次（Python 版） | 可编译的骨架；所有方法 `Promise.reject(NotImplementedError)` |
 | 代码量 | 源码 1,120 行（其中 agent 本身约 750 行，另有评测和消融脚本） | 源码约 315 行，其中 `contracts.ts` 168 行 |
 | 组件 | llm、tools、context、agent、main（+ ablate、evaluate） | Kernel、Workflow、ContextEngine、AgentToolPool、ApiCallExecutor、WebSearchExecutor、runtime |
 | 依赖 | 运行时零依赖；开发只用 typescript、@types/node | 沿用仓库根目录的 tsc / vitest / eslint 配置 |
