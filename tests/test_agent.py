@@ -83,3 +83,21 @@ def test_errors_are_fed_back_and_multiple_calls_share_a_step(tools):
     tool_messages = [m for m in llm.calls[1]["messages"] if m["role"] == "tool"]
     assert tool_messages[0]["content"].startswith("ERROR: unknown tool")
     assert tool_messages[1]["content"] == "app.py"
+
+
+def test_trim_replaces_oldest_tool_results_only():
+    from mini_agent import context
+
+    messages = context.initial("q", "demo")
+    for i in range(6):
+        messages.append(tool_reply((f"c{i}", "search", {"pattern": "x"})).message)
+        messages.append({"role": "tool", "tool_call_id": f"c{i}", "content": "y" * 1000})
+    trimmed = context.trim(messages, max_chars=4000)
+
+    assert len(trimmed) == len(messages)  # 只替换内容，不删消息
+    assert trimmed[:2] == messages[:2]  # system 和问题不动
+    assert trimmed[-4:] == messages[-4:]  # 最近 4 条不动
+    assert trimmed[3]["content"].startswith("[已省略，共 1000 字符")
+    assert trimmed[3]["tool_call_id"] == "c0"  # 配对信息保留
+    assert messages[3]["content"] == "y" * 1000  # 原列表没被修改
+    assert context.trim(messages, max_chars=10**6) is messages  # 不超限时原样返回

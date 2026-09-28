@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
+from mini_agent import context
 from mini_agent.tools import Tools
 
 FINAL_PROMPT = "已达到步数上限。请根据已获得的信息直接回答，不要再调用工具。"
@@ -37,17 +38,9 @@ def print_step(step: Step) -> None:
         print(f"[step {step.number}] {step.tool} {arguments} -> {step.result_chars} chars")
 
 
-def _initial_messages(question: str, repo_name: str) -> list[dict]:
-    # 临时版本，第 4 步换成 context.initial()
-    return [
-        {"role": "system", "content": "你是仓库问答助手。只能用工具获取信息，回答时引用 路径:行号。"},
-        {"role": "user", "content": f"仓库：{repo_name}\n问题：{question}"},
-    ]
-
-
 def run(question: str, llm, tools: Tools, repo_name: str,
         max_steps: int = 10, on_step=print_step) -> RunResult:
-    messages = _initial_messages(question, repo_name)
+    messages = context.initial(question, repo_name)
     specs = tools.specs()  # 整个运行过程中工具集不变，前缀才能命中缓存
     steps: list[Step] = []
 
@@ -64,7 +57,7 @@ def run(question: str, llm, tools: Tools, repo_name: str,
             step = Step(number, call.name, call.arguments, len(result))
             steps.append(step)
             on_step(step)
-        # 第 4 步在这里加上 messages = context.trim(messages)
+        messages = context.trim(messages)  # 太长时把最早的工具结果换成占位符
 
     # 步数用完：工具集照传，但禁止调用工具，逼模型基于已有信息作答
     messages.append({"role": "user", "content": FINAL_PROMPT})
