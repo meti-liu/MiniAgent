@@ -8,3 +8,6 @@ __pycache__/
 .venv/
 .pytest_cache/
 .DS_Store
+
+# 消融实验的输出
+runs/
