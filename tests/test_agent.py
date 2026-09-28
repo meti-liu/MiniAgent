@@ -57,6 +57,9 @@ def test_search_then_read_then_answer(tools):
     assert [m["tool_call_id"] for m in tool_messages] == ["c1", "c2"]
     assert "app.py:1: def hello():" in tool_messages[0]["content"]
     assert "2:     return 'hi'" in tool_messages[1]["content"]
+    # 第一条用户消息里有目录概览，而且在问题前面
+    first_user = llm.calls[0]["messages"][1]["content"]
+    assert first_user.index("app.py") < first_user.index("问题：")
 
 
 def test_stops_after_max_steps_with_tool_choice_none(tools):

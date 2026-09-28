@@ -1,6 +1,6 @@
 """上下文：决定每次放进模型“眼里”的是什么（对应 M1 的 ContextEngine）。
 
-SYSTEM_PROMPT 一字不变，保证每次调用的开头相同、能命中缓存；会变的仓库名和问题放进第一条用户消息。
+SYSTEM_PROMPT 一字不变，保证每次调用的开头相同、能命中缓存；会变的仓库名、目录概览和问题放进第一条用户消息。
 trim 在总长度超限时，把最早的工具结果换成占位符，控制上下文长度。
 """
 
@@ -12,6 +12,7 @@ SYSTEM_PROMPT = """你是一个代码仓库问答助手，帮助用户理解一�
 
 ## 工作方式
 - 你看不到仓库内容，只能通过工具获取信息；不要凭记忆或猜测回答。
+- 第一条消息附有仓库的目录概览，先用它判断该去哪里找，不必再从根目录逐层 list_dir。
 - 先用 search 或 list_dir 定位，再用 read_file 读取相关的几行；不要整文件通读。
 - 可以在一次回复里同时调用多个工具。
 - 工具返回 ERROR 时，读懂原因后换参数重试。
@@ -26,10 +27,15 @@ SYSTEM_PROMPT = """你是一个代码仓库问答助手，帮助用户理解一�
 KEEP_RECENT = 4  # 最近几条消息不裁剪
 
 
-def initial(question: str, repo_name: str) -> list[dict]:
+def initial(question: str, repo_name: str, overview: str = "") -> list[dict]:
+    # 顺序：仓库名 → 目录概览 → 问题。同一仓库的概览相同，放在问题前面，换问题时这段也能命中缓存
+    parts = [f"仓库：{repo_name}"]
+    if overview:
+        parts.append(f"目录概览（深度 ≤3，每个目录最多 20 项）：\n{overview}")
+    parts.append(f"问题：{question}")
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": f"仓库：{repo_name}\n\n问题：{question}"},
+        {"role": "user", "content": "\n\n".join(parts)},
     ]
 
 

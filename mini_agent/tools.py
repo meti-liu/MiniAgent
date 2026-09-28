@@ -10,12 +10,15 @@ import os
 import re
 from pathlib import Path
 
-SKIP_NAMES = {".git", "node_modules", ".venv", "__pycache__", "dist"}
+SKIP_NAMES = {".git", "node_modules", ".venv", "__pycache__", ".pytest_cache", "dist"}
 MAX_FILE_BYTES = 1_000_000
 MAX_OUTPUT_CHARS = 12_000
 MAX_ENTRIES = 200
 MAX_HITS = 50
 MAX_LINES = 200
+OVERVIEW_DEPTH = 3
+OVERVIEW_PER_DIR = 20
+OVERVIEW_MAX_CHARS = 4_000
 
 
 class ToolError(Exception):
@@ -156,3 +159,29 @@ class Tools:
         body = [f"{n}: {lines[n - 1]}" for n in range(start, min(end, len(lines)) + 1)]
         header = f"{target.relative_to(self.root).as_posix()}（第 {start}-{min(end, len(lines))} 行，共 {len(lines)} 行）"
         return "\n".join([header, *body])
+
+    # ---- 仓库概览：运行开始时放进第一条用户消息，不在 specs() 里，模型不能调用 ----
+
+    def overview(self) -> str:
+        """深度不超过 OVERVIEW_DEPTH 的目录树；对应 M1 ORIENT 里的“目录树”。"""
+        lines: list[str] = []
+
+        def walk(folder: Path, depth: int) -> None:
+            entries = [p for p in sorted(folder.iterdir()) if not is_skipped(p.name)]
+            for entry in entries[:OVERVIEW_PER_DIR]:
+                try:
+                    self._check(entry.resolve())  # 指向仓库外或被跳过的位置，就不列出
+                except ToolError:
+                    continue
+                is_dir = entry.is_dir()
+                lines.append("  " * depth + entry.name + ("/" if is_dir else ""))
+                if is_dir and depth + 1 < OVERVIEW_DEPTH:
+                    walk(entry, depth + 1)
+            if len(entries) > OVERVIEW_PER_DIR:
+                lines.append("  " * depth + f"…(+{len(entries) - OVERVIEW_PER_DIR})")
+
+        walk(self.root, 0)
+        text = "\n".join(lines)
+        if len(text) > OVERVIEW_MAX_CHARS:
+            text = text[:OVERVIEW_MAX_CHARS] + "\n[概览已截断，其余部分请用 list_dir 查看]"
+        return text

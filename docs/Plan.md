@@ -159,19 +159,24 @@ class Tools:
 安全规则（这是 M1 里 Kernel 准入和 Executor 的最小版本）：
 
 1. 所有路径先 `(root / path).resolve()`，结果必须在 `root.resolve()` 之内，否则返回 `ERROR: outside repository`。这一条同时挡住 `..`、绝对路径和指向外部的符号链接。
-2. 跳过 `.git`、`node_modules`、`.venv`、`__pycache__`、`dist` 和 `.env*`。
+2. 跳过 `.git`、`node_modules`、`.venv`、`__pycache__`、`.pytest_cache`、`dist` 和 `.env*`（按小写比较）。
 3. 单个文件超过 1 MB 或无法按 UTF-8 解码时不读取，返回说明。
 4. 每个工具输出最多 12,000 个字符，超出截断并注明。
 5. 没有任何写文件、删文件或执行命令的代码。
+
+另有一个**不给模型调用**的方法 `overview()`：运行开始时生成深度不超过 3 层的目录树（目录以 `/` 结尾，每个目录最多 20 项，超出写 `…(+N)`，总长不超过 4,000 字符），
+遵守同样的安全规则。它对应 M1 ContextEngine 的 ORIENT 里“目录树”那一项，其余几项（README、清单文件、符号大纲）暂不做。
+加它的原因见 `docs/Runs.md` 第 3 轮：没有概览时，模型问“入口在哪”只能逐层 `list_dir`，撞上步数上限。
 
 ### 5.3 `context.py`（约 60 行）— 对应 M1 的 ContextEngine
 
 ```python
 SYSTEM_PROMPT: str
-def initial(question: str, repo_name: str) -> list[dict]: ...
+def initial(question: str, repo_name: str, overview: str = "") -> list[dict]: ...
 def trim(messages: list[dict], max_chars: int = 60_000) -> list[dict]: ...
 ```
 
+- 第一条用户消息的顺序是“仓库名 → 目录概览 → 问题”：同一个仓库的概览相同，放在问题前面，换问题时这段前缀仍能命中缓存。
 - 系统提示词写清楚：只能用工具获取信息；先搜索再读；回答必须引用 `路径:起始行-结束行`；信息不足时明确说出来。
   提示词保持固定不变，这样每次调用的开头相同，可以命中 DeepSeek 的缓存（这就是 M1 里“稳定前缀”的由来）。
   仓库名这类会变的信息不写进系统提示词，而是和问题一起放进第一条用户消息，这样换仓库、换问题时前缀依然相同。
@@ -239,6 +244,7 @@ python -m mini_agent "问题" [--repo 路径，默认当前目录] [--max-steps 
 | 3 | `agent.py` + `test_agent.py`（假模型） | `pytest` 通过 |
 | 4 | `context.py`，`main.py` 接上完整循环和用量汇总 | 对 mini-agent 自己问一个问题并得到带行号的回答 |
 | 5 | 用第 1.1 节的 3 类问题试跑（可用 `--repo ../MultiAgentOS` 作为只读提问对象），记录到 `docs/Runs.md`，根据结果调整提示词 | 3 个问题都有带引用的回答 |
+| 6 | 仓库概览：`Tools.overview()` 生成浅层目录树，`context.initial` 把它放进第一条用户消息（见 5.2、5.3） | 在 MultiAgentOS 上重问“入口在哪”，对比第 3 轮的步数和费用，记录到 `docs/Runs.md` |
 
 预计总量：代码约 420 行，测试约 150 行。
 
@@ -286,7 +292,6 @@ Harness 指包在模型外面、让它能可靠干活的那层程序。模型本
 - 消融实验：一次去掉一个组件（例如 trim、提示词里的某条规则），在同一组问题上对比 `docs/Runs.md` 的结果，看哪些组件真正起作用
 - 检测“连续几步没有新信息”并提前停止
 - 更好的搜索（按文件名、按符号、结果排序）
-- 仓库概览：运行开始时把浅层目录树放进第一条用户消息（类似 M1 的 ORIENT）。在 MultiAgentOS 上问“入口在哪”时，模型用 17 次 `list_dir` 逐层探索并撞上 max_steps，见 `docs/Runs.md` 第 3 轮
 - 开启 thinking 模式后的效果和费用对比
 - 把一次运行的完整 messages 存成 JSON，方便回看和评测
 - 密钥脱敏：工具结果和用户问题进入 messages 之前，用正则（如 `sk-...`）把疑似密钥替换成 `[REDACTED]` 并提示用户。它属于 Kernel 的准入层（所有内容的必经之路），不属于 ContextEngine；对应本项目就是放在 `Tools.run` 返回之前

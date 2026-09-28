@@ -40,7 +40,7 @@ def print_step(step: Step) -> None:
 
 def run(question: str, llm, tools: Tools, repo_name: str,
         max_steps: int = 10, on_step=print_step) -> RunResult:
-    messages = context.initial(question, repo_name)
+    messages = context.initial(question, repo_name, tools.overview())  # 开头就给出目录概览
     specs = tools.specs()  # 整个运行过程中工具集不变，前缀才能命中缓存
     steps: list[Step] = []
 

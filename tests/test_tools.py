@@ -87,3 +87,23 @@ def test_bad_calls_return_errors(repo):
 def test_specs_describe_three_tools(repo):
     names = [spec["function"]["name"] for spec in Tools(repo).specs()]
     assert names == ["list_dir", "search", "read_file"]
+
+
+def test_overview_lists_tree_and_skips_hidden(repo):
+    (repo / "src" / "deep" / "deeper" / "deepest").mkdir(parents=True)
+    out = Tools(repo).overview()
+    assert out.splitlines() == [
+        "README.md",
+        "src/",
+        "  app.py",
+        "  deep/",
+        "    deeper/",  # 第 3 层还列出，但不再往下
+    ]  # link.txt 指向仓库外，.git 和 .env 被跳过
+
+
+def test_overview_caps_entries_per_dir(repo):
+    for i in range(25):
+        (repo / "src" / f"m{i:02d}.py").write_text("", encoding="utf-8")
+    lines = Tools(repo).overview().splitlines()
+    assert "  …(+6)" in lines  # src 里共 26 项，只列 20 项
+
