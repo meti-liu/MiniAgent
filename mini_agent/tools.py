@@ -23,6 +23,8 @@ class ToolError(Exception):
 
 
 def is_skipped(name: str) -> bool:
+    # 按小写比较：macOS 默认不区分大小写，.GIT 和 .git 是同一个目录
+    name = name.lower()
     return name in SKIP_NAMES or name.startswith(".env")
 
 

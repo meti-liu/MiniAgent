@@ -53,6 +53,16 @@ def test_search_does_not_follow_links_into_skipped_files(repo):
     assert "secret" not in Tools(repo).run("search", {"pattern": "secret"})
 
 
+def test_skipped_names_ignore_case(repo):
+    # 在 macOS 上 .GIT/config 就是 .git/config；这里直接建大写目录来模拟
+    (repo / ".GIT").mkdir()
+    (repo / ".GIT" / "config").write_text("x\n", encoding="utf-8")
+    (repo / ".ENV.local").write_text("x\n", encoding="utf-8")
+    tools = Tools(repo)
+    assert tools.run("read_file", {"path": ".GIT/config"}) == "ERROR: path is skipped"
+    assert tools.run("read_file", {"path": ".ENV.local"}) == "ERROR: path is skipped"
+
+
 def test_long_output_is_truncated(repo):
     (repo / "big.txt").write_text(("x" * 100 + "\n") * 200, encoding="utf-8")
     out = Tools(repo).run("read_file", {"path": "big.txt"})
