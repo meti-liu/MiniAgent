@@ -162,8 +162,12 @@ class Tools:
 
     # ---- 仓库概览：运行开始时放进第一条用户消息，不在 specs() 里，模型不能调用 ----
 
-    def overview(self) -> str:
-        """深度不超过 OVERVIEW_DEPTH 的目录树；对应 M1 ORIENT 里的“目录树”。"""
+    def overview(self, mode: str = "tree") -> str:
+        """对应 M1 的 ORIENT。mode="none" 返回空字符串，只用于消融实验。"""
+        return "" if mode == "none" else self._tree()
+
+    def _tree(self) -> str:
+        """深度不超过 OVERVIEW_DEPTH 的目录树。"""
         lines: list[str] = []
 
         def walk(folder: Path, depth: int) -> None:

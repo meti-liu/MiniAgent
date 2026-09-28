@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import json
 
-SYSTEM_PROMPT = """你是一个代码仓库问答助手，帮助用户理解一个本地代码仓库。
+BASE_PROMPT = """你是一个代码仓库问答助手，帮助用户理解一个本地代码仓库。
 
 ## 工作方式
 - 你看不到仓库内容，只能通过工具获取信息；不要凭记忆或猜测回答。
-- 第一条消息附有仓库的目录概览，先用它判断该去哪里找，不必再从根目录逐层 list_dir。
+- 第一条消息如果附有仓库概览，先用它判断该去哪里找，不必从根目录逐层 list_dir。
 - 先用 search 或 list_dir 定位，再用 read_file 读取相关的几行；不要整文件通读。
 - 可以在一次回复里同时调用多个工具。
 - 工具返回 ERROR 时，读懂原因后换参数重试。
@@ -20,21 +20,26 @@ SYSTEM_PROMPT = """你是一个代码仓库问答助手，帮助用户理解一�
 ## 回答要求
 - 用中文回答，先给结论，再给依据，保持简洁。
 - 每个关键结论后面标注来源，格式为 `路径:起始行-结束行`，必须是你用工具实际看到过的行。
+- 信息不足时明确说出还缺什么，不要编造。"""
+
+# 第 5 步根据试跑加上的两条规则；消融实验可以关掉它们（Settings.strict_prompt=False）
+STRICT_RULES = """
 - 只对实际读到的内容下结论；如果某个文件只看过搜索命中的几行，不要推断它其余部分写了什么或没写什么。
-- 信息不足时明确说出还缺什么，不要编造。
 - 直接输出最终回答，不要描述你的检查过程。"""
+
+SYSTEM_PROMPT = BASE_PROMPT + STRICT_RULES
 
 KEEP_RECENT = 4  # 最近几条消息不裁剪
 
 
-def initial(question: str, repo_name: str, overview: str = "") -> list[dict]:
+def initial(question: str, repo_name: str, overview: str = "", strict: bool = True) -> list[dict]:
     # 顺序：仓库名 → 目录概览 → 问题。同一仓库的概览相同，放在问题前面，换问题时这段也能命中缓存
     parts = [f"仓库：{repo_name}"]
     if overview:
         parts.append(f"目录概览（深度 ≤3，每个目录最多 20 项）：\n{overview}")
     parts.append(f"问题：{question}")
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": SYSTEM_PROMPT if strict else BASE_PROMPT},
         {"role": "user", "content": "\n\n".join(parts)},
     ]
 

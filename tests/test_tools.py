@@ -107,3 +107,7 @@ def test_overview_caps_entries_per_dir(repo):
     lines = Tools(repo).overview().splitlines()
     assert "  …(+6)" in lines  # src 里共 26 项，只列 20 项
 
+
+def test_overview_none_is_empty(repo):
+    assert Tools(repo).overview("none") == ""
+

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from mini_agent.agent import FINAL_PROMPT, run
+from mini_agent.agent import FINAL_PROMPT, REPEAT_NOTE, Settings, run
 from mini_agent.llm import Reply, ToolCall
 from mini_agent.tools import Tools
 
@@ -104,3 +104,37 @@ def test_trim_replaces_oldest_tool_results_only():
     assert trimmed[3]["tool_call_id"] == "c0"  # 配对信息保留
     assert messages[3]["content"] == "y" * 1000  # 原列表没被修改
     assert context.trim(messages, max_chars=10**6) is messages  # 不超限时原样返回
+
+
+def test_identical_calls_are_not_run_twice(tools):
+    replies = [tool_reply(("c1", "list_dir", {})), tool_reply(("c2", "list_dir", {"path": "."}),
+               ("c3", "list_dir", {})), answer_reply("done")]
+    result = run("q", FakeLLM(replies), tools, "demo", on_step=lambda s: None)
+    assert [s.repeated for s in result.steps] == [False, False, True, False]
+
+    llm = FakeLLM(replies)
+    run("q", llm, tools, "demo", on_step=lambda s: None, settings=Settings(dedup=False))
+    contents = [m["content"] for m in llm.calls[-1]["messages"] if m["role"] == "tool"]
+    assert REPEAT_NOTE not in contents  # 关掉 dedup 时照常执行
+
+
+def test_repeat_runs_again_after_trim(tools):
+    from mini_agent.agent import _run_tool
+    from mini_agent.llm import ToolCall
+
+    call, seen = ToolCall("c1", "list_dir", {}), {}
+    messages = [{"role": "tool", "content": _run_tool(call, tools, [], seen, True)[0]}]
+    assert _run_tool(call, tools, messages, seen, True) == (REPEAT_NOTE, True)
+    messages[0]["content"] = "[已省略，共 6 字符]"  # 模拟被 trim 省略
+    assert _run_tool(call, tools, messages, seen, True) == ("app.py", False)
+
+
+def test_loose_prompt_drops_strict_rules(tools):
+    from mini_agent.context import STRICT_RULES
+
+    strict, loose = FakeLLM([answer_reply("a")]), FakeLLM([answer_reply("a")])
+    run("q", strict, tools, "demo", on_step=lambda s: None)
+    run("q", loose, tools, "demo", on_step=lambda s: None, settings=Settings(strict_prompt=False))
+    assert STRICT_RULES in strict.calls[0]["messages"][0]["content"]
+    assert STRICT_RULES not in loose.calls[0]["messages"][0]["content"]
+
