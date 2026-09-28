@@ -60,7 +60,9 @@
 | 程序入口在哪里，启动时做了什么？（找未知实现） | 11，**撞上 max_steps** | 29 | 50,420（33,280） | 2,751 | $0.0043 |
 | ContextEngine 和 Kernel 怎么传递数据？（跨文件） | 6 | 10 | 34,534（24,448） | 1,426 | $0.0024 |
 
-引用尚未逐行核对（需要读 MultiAgentOS 被引用的行），以下只根据运行输出分析。
+引用核对（经 meti 同意，只读了 MultiAgentOS 中被引用的行）：三题抽查约 40 处 `路径:行号`，全部与原文一致，没有发现错误结论。
+第 3 题指出的两处规范偏差也属实：Kernel 把 ContextEngine 的异常统一折叠成 `CONTEXT_EXECUTION_FAILED`（规范要求保留稳定错误码），`LocalContextEngine` 忽略了 `BoundaryContext` 参数。
+漏掉的一点：同一题引用了 ContextPack 的 schema，但没有注意到它比规范少了 `requestId`、`snapshotId`、`truncated` 等字段。模型只回答了被问到的问题，不会主动做规范比对。
 
 - **问题有明确关键词时表现很好**：ORIENT 一题两次搜索、两次定点读取就答完；跨文件那题 5 轮就把 Kernel → ContextPort → ContextPack → ArtifactStore 的链路串起来。
 - **“找入口”这类没有关键词的问题最费劲**：模型只能一层层 `list_dir`（29 次工具调用里有 17 次是列目录），10 步用完。
