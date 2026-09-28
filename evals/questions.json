@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "notes": [
+    "must：每一组是一个必须出现的事实，组内任意一个正则命中即可（不区分大小写）。must_not：出现就算错，用来抓编造。",
+    "fixture 是 mini-agent Python 实现在 a9b4441 的冻结副本，不随代码变化；multiagentos 固定在下面的 commit，HEAD 不同时评测脚本会提醒。",
+    "所有事实都已对照源码核实过。"
+  ],
+  "repos": {
+    "fixture": {"path": "evals/fixture"},
+    "multiagentos": {"path": "../MultiAgentOS", "commit": "52f3b3fd4304eb941b2635e07c7a6b7f8a261163"}
+  },
+  "questions": [
+    {
+      "id": "fx-trim", "repo": "fixture", "type": "解释已知函数",
+      "question": "context.trim 做了什么？为什么它只替换消息内容而不删除消息？",
+      "must": [["60[,_]?000", "6 ?万"], ["占位", "已省略"], ["KEEP_RECENT", "最近 ?4"], ["tool_call_id", "成对", "配对"]]
+    },
+    {
+      "id": "fx-peak", "repo": "fixture", "type": "找未知实现",
+      "question": "高峰时段的费用翻倍是在哪里计算的？",
+      "must": [["is_peak"], ["Usage\\.add", "def add", "\\badd\\("], ["llm\\.py"]]
+    },
+    {
+      "id": "fx-badjson", "repo": "fixture", "type": "跨文件解释",
+      "question": "如果模型返回的工具参数不是合法 JSON，从解析到把错误反馈给模型，经过了哪些代码？",
+      "must": [["_raw"], ["parse_reply", "llm\\.py"], ["Tools\\.run", "tools\\.py"], ["ERROR"]]
+    },
+    {
+      "id": "fx-entry", "repo": "fixture", "type": "找未知实现（无关键词）",
+      "question": "这个仓库的命令行入口在哪里，启动后依次做了什么？",
+      "must": [["__main__"], ["main\\.py"], ["DEEPSEEK_API_KEY"], ["agent\\.run", "agent\\.py"]]
+    },
+    {
+      "id": "fx-sandbox", "repo": "fixture", "type": "解释机制",
+      "question": "工具是怎么防止读取到仓库目录以外的文件的？",
+      "must": [["resolve"], ["parents", "outside repository"], ["符号链接", "symlink", "软链接"]]
+    },
+    {
+      "id": "fx-nodb", "repo": "fixture", "type": "不存在的功能（考诚实）",
+      "question": "这个项目是怎么把对话历史保存到数据库里的？",
+      "must": [["没有", "不存在", "并不", "未(实现|保存|使用|提供)", "不会"]],
+      "must_not": ["sqlite", "sqlalchemy", "postgres", "mysql", "redis"]
+    },
+    {
+      "id": "ma-entry", "repo": "multiagentos", "type": "找未知实现（无关键词）",
+      "question": "这个项目的程序入口在哪里，启动时依次做了什么？",
+      "must": [["createM1Runtime"], ["control-plane"], ["ModuleHost", "host\\.start"]]
+    },
+    {
+      "id": "ma-orient", "repo": "multiagentos", "type": "解释已知概念",
+      "question": "ContextEngine 的 ORIENT 做了什么？",
+      "must": [["概览"], ["2,?500"], ["(尚未|还没有?|未|没有)(真正)?(实现|落地)", "\\.gitkeep", "只在文档"]]
+    },
+    {
+      "id": "ma-ctx-kernel", "repo": "multiagentos", "type": "跨文件解释",
+      "question": "ContextEngine 和 Kernel 之间是怎么传递数据的？",
+      "must": [["ContextPort", "buildContext"], ["ContextPack"], ["ArtifactStore", "artifacts\\.put", "ArtifactRef", "outputRef"]]
+    },
+    {
+      "id": "ma-mismatch", "repo": "multiagentos", "type": "找未知实现",
+      "question": "Kernel 在什么情况下会返回 WORKSPACE_MISMATCH？",
+      "must": [["workspaceId"], ["kernel/src/index\\.ts", "Kernel"]]
+    }
+  ]
+}

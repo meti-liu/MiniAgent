@@ -2,13 +2,11 @@
 
 解析参数、检查 key 和仓库路径，创建模型客户端和工具箱，运行 agent，
 最后打印回答和一行用量汇总（模型调用次数、输入 token 及缓存命中、输出 token、估算费用）。
-加 --json 时只输出一行 JSON，给评测脚本（evaluate.py）读取，Python 和 TypeScript 两个实现的格式相同。
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 from pathlib import Path
@@ -24,7 +22,6 @@ def run() -> None:
     parser.add_argument("--repo", default=".", help="仓库路径，默认当前目录")
     parser.add_argument("--max-steps", type=int, default=10)
     parser.add_argument("--model", default="deepseek-flash")
-    parser.add_argument("--json", action="store_true", help="只输出一行 JSON，供评测脚本读取")
     args = parser.parse_args()
 
     api_key = os.environ.get("DEEPSEEK_API_KEY")
@@ -38,25 +35,15 @@ def run() -> None:
 
     llm = LLMClient(api_key, model=args.model)
     try:
-        on_step = (lambda step: None) if args.json else agent.print_step
-        result = agent.run(args.question, llm, Tools(root), root.name,
-                           max_steps=args.max_steps, on_step=on_step)
+        result = agent.run(args.question, llm, Tools(root), root.name, max_steps=args.max_steps)
     except LLMError as error:
         print(f"调用模型失败：{error}", file=sys.stderr)
         sys.exit(1)
 
-    u = llm.usage
-    if args.json:
-        print(json.dumps({
-            "answer": result.answer,
-            "stopped_by": result.stopped_by,
-            "steps": [vars(step) for step in result.steps],
-            "usage": vars(u),
-        }, ensure_ascii=False))
-        return
     print()
     print(result.answer)
     print()
+    u = llm.usage
     note = "（达到步数上限）" if result.stopped_by == "max_steps" else ""
     print(f"steps={u.calls}{note}  input={u.cache_hit + u.cache_miss:,} tokens "
           f"(cache hit {u.cache_hit:,})  output={u.output:,} tokens  cost≈${u.cost_usd:.4f}")

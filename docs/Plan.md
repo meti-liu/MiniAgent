@@ -46,6 +46,8 @@ steps=3  input=5,210 tokens (cache hit 3,072)  output=412 tokens  cost≈$0.0009
 ├── .env.example          # DEEPSEEK_API_KEY=
 ├── docs/Plan.md          # 本文
 ├── docs/Runs.md          # 真实模型试跑记录（第 7 节第 5 步）
+├── evals/questions.json  # 评测题库：问题 + 必须提到的事实
+├── evals/fixture/        # 评测用的冻结仓库（Python 实现在 a9b4441 的副本）
 ├── mini_agent/
 │   ├── __main__.py       # 让 python -m mini_agent 可用，只调用 main.run()
 │   ├── llm.py
@@ -53,7 +55,8 @@ steps=3  input=5,210 tokens (cache hit 3,072)  output=412 tokens  cost≈$0.0009
 │   ├── context.py
 │   ├── agent.py
 │   ├── main.py
-│   └── ablate.py         # 消融实验脚本（第 7 节第 9 步），不属于 agent 本身
+│   ├── ablate.py         # 消融实验脚本（第 7 节第 9 步），不属于 agent 本身
+│   └── evaluate.py       # 用固定题库评测（第 7 节第 10 步），可以评测任何语言的实现
 └── tests/
     ├── test_tools.py
     └── test_agent.py
@@ -241,6 +244,19 @@ python -m mini_agent.ablate --repo 路径 "问题1" "问题2" ... [--repeat 2] [
 - 明细写到 `runs/ablation-时间.json`（`runs/` 不进仓库），终端打印按配置汇总的表格；分析写进 `docs/Runs.md`。
 - 程序化核对只能发现“引用不存在”，发现不了“结论错误”（见 `docs/Runs.md` 第 1 轮），所以回答质量仍要人工抽查。
 
+### 5.7 `evaluate.py` 与题库 — 评测（不属于 agent）
+
+```text
+python -m mini_agent.evaluate [--cmd "调用 agent 的命令"] [--label python] [--repeat 3] [--ids fx-trim ...]
+```
+
+- 题库 `evals/questions.json`：10 道题，覆盖解释已知函数、找未知实现（有/无关键词）、跨文件解释、不存在的功能（考诚实）。
+  每题列出“必须提到的事实”（每个事实是一组正则，命中任意一个即可）和“不应出现的内容”（用来抓编造）。所有事实都对照源码核实过。
+- 目标仓库固定：`evals/fixture/` 是 Python 实现的冻结副本，不随代码变化；MultiAgentOS 固定 commit，HEAD 不同时提醒。
+- 通过命令行调用 agent 并读取 `--json` 输出（`main.py` 新增的参数），所以同一套题库能评测 Python 和 TypeScript 两个实现。
+- 结果：每题通过率、事实命中率、模型调用次数、费用、引用核对；明细写到 `runs/`。
+- 正则打分只能判断“提没提到关键事实”，判断不了推理对不对，仍需人工抽查回答。
+
 ## 6. 测试
 
 只测不联网的部分：
@@ -270,6 +286,9 @@ python -m mini_agent.ablate --repo 路径 "问题1" "问题2" ... [--repeat 2] [
 | 7 | 重复调用检测 + `Settings` 开关 | `pytest` 通过 |
 | 8 | 完善 ORIENT：概览加入 AGENTS.md/CLAUDE.md、README、清单文件 | `pytest` 通过 |
 | 9 | `ablate.py` 消融实验：在 MultiAgentOS 上跑 5 种配置，分析写进 `docs/Runs.md` | 能说出每个组件对步数、费用、引用质量的影响 |
+| 10 | 评测题库 + `evaluate.py` + `main.py --json` | `pytest` 通过；在 Python 实现上跑出基线分数 |
+| 11 | 在 `ts-port` 分支把实现改写成 TypeScript（CLI 和 `--json` 格式保持一致） | 测试和类型检查通过；用同一题库跑分 |
+| 12 | 和 MultiAgentOS `experiment/M0` 分支（Cary 的 minimal-agent-loop）做横向对比，写 `docs/Compare-M0.md` | 能说清两者在架构、边界、上下文、错误处理上的差异和各自可借鉴之处 |
 
 预计总量：代码约 420 行，测试约 150 行。
 
