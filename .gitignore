@@ -11,3 +11,6 @@ __pycache__/
 
 # 消融实验的输出
 runs/
+
+# TypeScript 依赖
+node_modules/

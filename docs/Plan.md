@@ -2,6 +2,7 @@
 
 > 2026-09-28。本文是 mini-agent 仓库的规划文档（`docs/Plan.md`），新对话直接按它实现。
 > 目的：让 meti 亲手看懂一个 agent 是怎么跑起来的。它是学习样机，不是 M1 交付物。
+> **`ts-port` 分支**：实现已整体改写为 TypeScript，第 2–7 节里的 Python 文件名按第 11 节的对照表理解。
 
 ## 1. 目标
 
@@ -340,6 +341,31 @@ Harness 指包在模型外面、让它能可靠干活的那层程序。模型本
 - 开启 thinking 模式后的效果和费用对比
 - 把一次运行的完整 messages 存成 JSON，方便回看和评测
 - 密钥脱敏：工具结果和用户问题进入 messages 之前，用正则（如 `sk-...`）把疑似密钥替换成 `[REDACTED]` 并提示用户。它属于 Kernel 的准入层（所有内容的必经之路），不属于 ContextEngine；对应本项目就是放在 `Tools.run` 返回之前
+
+## 11. TypeScript 版（`ts-port` 分支，第 7 节第 11 步）
+
+逐文件移植 Python 版（main 分支 `5476af2`），行为、提示词、CLI 参数和 `--json` 输出格式都保持一致，
+这样同一套题库可以评测两个实现：在 main 上运行 `python -m mini_agent.evaluate --cmd "node 路径/src/main.ts" --label ts`，
+或在本分支运行 `node src/evaluate.ts --cmd "python3 -m mini_agent" --label python`（需要 main 的代码在另一个工作目录，见 `git worktree`）。
+
+| Python | TypeScript | 说明 |
+|---|---|---|
+| `mini_agent/llm.py` | `src/llm.ts` | `urllib` → 内置 `fetch`；`ChatModel` 接口代替鸭子类型 |
+| `mini_agent/tools.py` | `src/tools.ts` | `Path.resolve()` → `fs.realpathSync`；`os.walk` → 递归 `readdirSync` |
+| `mini_agent/context.py` | `src/context.ts` | 提示词逐字相同 |
+| `mini_agent/agent.py` | `src/agent.ts` | `run` 变成 `async`；`Settings` 用只读接口 + 冻结的默认值 |
+| `mini_agent/main.py` | `src/main.ts` | `argparse` → `node:util` 的 `parseArgs` |
+| `mini_agent/ablate.py`、`evaluate.py` | `src/ablate.ts`、`src/evaluate.ts` | 线程池 → 简单的 Promise 并发池 |
+| `tests/*.py`（pytest） | `test/*.test.ts`（`node:test`） | 测试用例一一对应，另加了 LLM 客户端的本地 HTTP 测试 |
+
+技术选择：运行时零依赖；开发依赖只有 `typescript` 和 `@types/node`（版本和 MultiAgentOS 一致）。
+不设编译步骤：Node ≥ 22.18 可以直接运行 `.ts`（类型擦除），`tsc` 只做类型检查（`noEmit`）。
+为此代码只用“可擦除”的 TS 语法（`erasableSyntaxOnly`）：不用 `enum`、不用构造函数参数属性，import 写 `.ts` 后缀。
+
+移植时和 Python 版不同的地方：
+- JS 调用函数时多传、漏传参数名不会报错，所以 `Tools.run` 显式检查参数名，返回和 Python 版同样的 `ERROR: bad arguments`。
+- JS 正则不支持开头的 `(?i)`（模型常这样写 Python 风格的正则），`search` 把它转换成 `i` 标志；工具描述改为“JavaScript 正则表达式”。
+- 文件不存在时 `realpathSync` 会抛错，这时退回到只做字面规范化的路径，反正读不到，不影响安全。
 
 ## 10. 给新对话的开场提示
 

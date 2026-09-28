@@ -1,0 +1,21 @@
+{
+  "name": "mini-agent",
+  "version": "0.2.0",
+  "private": true,
+  "description": "A minimal repository Q&A agent for learning how agents work (TypeScript port)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc",
+    "ablate": "node src/ablate.ts",
+    "evaluate": "node src/evaluate.ts"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "typescript": "6.0.3"
+  }
+}
