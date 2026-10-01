@@ -37,6 +37,11 @@ test("search accepts a Python-style (?i) prefix", () => {
   assert.ok(new Tools(repo).run("search", { pattern: "(?i)HELLO WORLD" }).includes("README.md:2"));
 });
 
+test("search in a missing path finds nothing instead of crashing", () => {
+  // 和 Python 版一样：模型猜错目录时只是“没有匹配”，不能让整个进程崩掉
+  assert.equal(new Tools(repo).run("search", { pattern: "hello", path: "no/such/dir" }), "(没有匹配)");
+});
+
 test("read_file returns a numbered range", () => {
   const out = new Tools(repo).run("read_file", { path: "src/app.py", start: 2, end: 3 });
   assert.deepEqual(out.split("\n").slice(1), ["2: def hello():", "3:     return 'hi'"]);

@@ -150,10 +150,11 @@ export class Tools {
 
   /** 遍历 target 下所有允许读的文件；符号链接按真实位置再检查一遍，不进入指向目录的链接。 */
   private *filesUnder(target: string): Generator<string> {
-    if (statSync(target).isFile()) {
+    if (this.isFile(target)) {
       yield target;
       return;
     }
+    if (!this.isDir(target)) return; // 路径不存在：和 os.walk 一样什么都不产出
     const entries = readdirSync(target, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
     const dirs: string[] = [];
     for (const entry of entries) {
