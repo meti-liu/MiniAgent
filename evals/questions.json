@@ -102,7 +102,7 @@
       "id": "m0-state-doc-gap", "repo": "m0ce", "type": "文档与代码不一致（难）",
       "question": "experiments/minimal-agent-loop 的 README 里画的 PlannerAgent 状态转换，和代码里 Planner 实际经历的状态一致吗？",
       "must": [["RUNNING"], ["(不一致|不符|没有经过|没进入|未进入|跳过|从未|不会进入|从来没有)[^。\\n]{0,30}(RUNNING|WAITING_UNIT)", "READY[^。\\n]{0,15}(直接|→|->)[^。\\n]{0,15}WAITING_UNIT", "RUNNING[^。\\n]{0,30}(没有|未|从未|不会)[^。\\n]{0,10}(出现|进入|设置|经过)"]],
-      "must_not": ["完全一致"]
+      "must_not": ["(?<!不)完全一致"]
     },
     {
       "id": "m1-draft-vs-sealed", "repo": "m1", "type": "版本管理规则（难）",
@@ -117,7 +117,7 @@
     {
       "id": "m1-model-gap", "repo": "m1", "type": "契约与实现的差距（难）",
       "question": "这个仓库的 M1 正式代码里（packages 和 apps），一个 executionKind 为 MODEL 的执行单元交给 Kernel 后会发生什么？",
-      "must": [["LocalReadExecutor"], ["unsupported", "不支持"], ["(没有|未|尚未|并未|还没)[^。\\n]{0,20}(调用|实现|接入|对接)[^。\\n]{0,10}模型", "(没有|未|尚未|并未|还没)[^。\\n]{0,15}(模型适配|ModelExecutor|model adapter|模型执行器)"]]
+      "must": [["LocalReadExecutor"], ["unsupported", "不支持"], ["(没有|未|尚未|并未|还没)[^。\\n]{0,20}(调用|实现|接入|对接)[^。\\n]{0,10}模型", "(没有|未|尚未|并未|还没)[^。\\n]{0,15}(模型适配|ModelExecutor|model adapter|模型执行器)", "模型[^。\\n]{0,10}(尚未|还没|没有|未|并未)[^。\\n]{0,10}(接入|实现|对接)", "没有[^。\\n]{0,10}MODEL[^。\\n]{0,10}(执行)?(路径|实现|适配)"]]
     },
     {
       "id": "ma-entry", "repo": "multiagentos", "type": "找未知实现（无关键词）",

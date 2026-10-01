@@ -32,7 +32,9 @@ meti 的个人学习仓库：一个最小的仓库问答 agent，目的是看懂
 - TS 版和 Python 基线行为一致（ts-port 分支 Runs.md 第 7 轮）
 - 第 13 步加了 5 道 fixture 难题，修正打分后两个实现都是 15/15（Runs.md 第 8 轮）：fixture 太小，难不起来
 - 比较费用时注意计价时段：本机 NZDT，UTC 06:00 起是高峰价 ×2，看 token 比看美元可靠
-- 下一步：`v2` 分支按 Plan.md 第 12 节做 A1 → A2 → B1 → C1 → D1 → W1（meti 已同意 A2 只读 MultiAgentOS 核实事实）
+- v2：A1 运行轨迹、A2 大仓库难题集已完成（Runs.md 第 9、10 轮）；A2 修正打分后 30/30，正确率饱和，后续看效率和引用完整率（Plan.md 12.4）
+- MultiAgentOS 题读的是 `../eval-snapshots/` 下的只读快照（git archive 导出），不是 meti 的工作目录
+- 下一步：B1 记忆压缩 → C1 → D1 → W1
 
 ## 本分支（v2，和 main 相同的基础上）怎么运行
 ```bash
