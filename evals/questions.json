@@ -42,6 +42,31 @@
       "must_not": ["sqlite3\\.connect", "create_engine", "CREATE TABLE", "session\\.commit", "redis\\.Redis"]
     },
     {
+      "id": "fx-hard-maxsteps", "repo": "fixture", "type": "多跳因果链（难）",
+      "question": "如果模型一直调用工具、迟迟不给回答，程序最终是怎么停下来并给出回答的？用户在命令行上能看出来吗？",
+      "must": [["tool_choice"], ["FINAL_PROMPT", "已达到步数上限"], ["--max-steps", "默认[^。\\n]{0,10}10", "10 ?(步|次)"], ["stopped_by", "（达到步数上限）", "main\\.py:4[4-9]"]]
+    },
+    {
+      "id": "fx-hard-dedup-trim", "repo": "fixture", "type": "机制交互（难）",
+      "question": "重复调用检测和 context.trim 会相互影响吗？如果某次调用的原结果已经被 trim 替换成占位符，之后模型再发出完全相同的调用会怎样？",
+      "must": [["已省略"], ["重新执行", "再次执行", "真正执行", "照常执行", "重新运行"], ["下标", "索引", "index"], ["不删除", "只替换", "不会删除"]]
+    },
+    {
+      "id": "fx-hard-timeout", "repo": "fixture", "type": "错误前提（难）",
+      "question": "模型请求超时以后，程序会等几秒再重试？最多重试几次？",
+      "must": [["(超时|网络|URLError|TimeoutError)[^。\\n]{0,30}不(会)?(再)?(进行)?重试", "不(会)?(进行)?重试[^。\\n]{0,30}(超时|网络|URLError|TimeoutError)"], ["429"], ["5\\d\\d", "5xx"], ["2 ?(秒|s\\b)", "RETRY_WAIT_SECONDS"]]
+    },
+    {
+      "id": "fx-hard-cache", "repo": "fixture", "type": "分散的设计理由（难）",
+      "question": "为了让模型请求尽量命中缓存，这个项目在构造请求时做了哪些安排？",
+      "must": [["(系统提示词|SYSTEM_PROMPT|system)[^。\\n]{0,30}(不变|固定|相同)"], ["(specs|tools|工具(定义|集|列表))[^。\\n]{0,30}(不变|固定|相同|同一)"], ["概览[^。\\n]{0,30}(问题)?(前面|之前)", "概览[^。\\n]{0,6}(→|->)[^。\\n]{0,6}问题"]]
+    },
+    {
+      "id": "fx-hard-multicall", "repo": "fixture", "type": "同一步多个工具调用（难）",
+      "question": "如果模型在一次回复里同时调用了 3 个工具，其中第 2 个的参数不是合法 JSON，会发生什么？另外两个还会执行吗？",
+      "must": [["_raw"], ["not valid JSON", "ERROR: arguments"], ["(另外|其他|其余|剩下|第 ?[13一三][^。\\n]{0,4}个)[^。\\n]{0,30}(照常|正常|仍然|仍|依然|继续|都会|也会|会被)[^。\\n]{0,10}执行"], ["(下一步|下一轮|下次|之后)[^。\\n]{0,30}(重试|修正|重新调用|换参数)", "换参数"]]
+    },
+    {
       "id": "ma-entry", "repo": "multiagentos", "type": "找未知实现（无关键词）",
       "question": "这个项目的程序入口在哪里，启动时依次做了什么？",
       "must": [["createM1Runtime"], ["control-plane"], ["ModuleHost", "host\\.start"]]

@@ -252,6 +252,9 @@ python -m mini_agent.evaluate [--cmd "调用 agent 的命令"] [--label python] 
 
 - 题库 `evals/questions.json`：10 道题，覆盖解释已知函数、找未知实现（有/无关键词）、跨文件解释、不存在的功能（考诚实）。
   每题列出“必须提到的事实”（每个事实是一组正则，命中任意一个即可）和“不应出现的内容”（用来抓编造）。所有事实都对照源码核实过。
+- 第 13 步加 5 道难题（都在 fixture 上，`fx-hard-` 开头）。前 10 题事实命中率 100%，分不出好坏；新题专门考前 10 题没覆盖的能力：
+  多跳因果链（≥3 个文件，按执行顺序串起来）、两个机制之间的相互作用、错误前提（问题本身假设错了，要能指出来）、
+  分散在多处的设计理由（只靠一次搜索拿不全）、同一步里多个工具调用的交互。答案都要读代码推理，不能只靠搜一个关键词。
 - 目标仓库固定：`evals/fixture/` 是 Python 实现的冻结副本，不随代码变化；MultiAgentOS 固定 commit，HEAD 不同时提醒。
 - 通过命令行调用 agent 并读取 `--json` 输出（`main.py` 新增的参数），所以同一套题库能评测 Python 和 TypeScript 两个实现。
 - 结果：每题通过率、事实命中率、模型调用次数、费用、引用核对；明细写到 `runs/`。
@@ -289,6 +292,7 @@ python -m mini_agent.evaluate [--cmd "调用 agent 的命令"] [--label python] 
 | 10 | 评测题库 + `evaluate.py` + `main.py --json` | `pytest` 通过；在 Python 实现上跑出基线分数 |
 | 11 | 在 `ts-port` 分支把实现改写成 TypeScript（CLI 和 `--json` 格式保持一致） | 测试和类型检查通过；用同一题库跑分 |
 | 12 | 和 MultiAgentOS `experiment/M0` 分支（Cary 的 minimal-agent-loop）做横向对比，写 `docs/Compare-M0.md` | 能说清两者在架构、边界、上下文、错误处理上的差异和各自可借鉴之处 |
+| 13 | 题库加 5 道难题（见 5.7），两个分支同步 | 测试通过；两个实现各跑一次评测，打分规则拿真实回答检验过，结果记进 `docs/Runs.md` |
 
 预计总量：代码约 420 行，测试约 150 行。
 
