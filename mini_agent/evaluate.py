@@ -19,7 +19,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
-from mini_agent.ablate import RUNS_DIR, check_citations
+from mini_agent import trace
+from mini_agent.ablate import CITATION, RUNS_DIR, check_citations
 from mini_agent.tools import Tools
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -77,13 +78,19 @@ def run_one(cmd: list[str], question: dict, repeat: int, data: dict, timeout: in
         return {**record, "error": f"退出码 {proc.returncode}：{proc.stderr.strip()[-200:]}"}
     answer, usage, steps = out["answer"], out["usage"], out["steps"]
     cited, bad = check_citations(answer, Tools(repo))
+    # 引用完整率：按原样写的路径能直接找到文件（简写如 workflow.ts:35 在大仓库里定位不了）
+    full = sum(1 for path, _, _ in set(CITATION.findall(answer)) if (repo / path).is_file())
+    trace_file = Path(ROOT, out["trace"]) if out.get("trace") else None
+    measured = trace.stats(json.loads(trace_file.read_text(encoding="utf-8"))) \
+        if trace_file and trace_file.is_file() else dict.fromkeys(["compactions", "rereads", "peak_input_tokens"])
     return {**record, **grade(answer, question), "stopped_by": out["stopped_by"],
             "model_calls": usage["calls"], "tool_calls": sum(1 for s in steps if s["tool"]),
             "input_tokens": usage["cache_hit"] + usage["cache_miss"], "cache_hit": usage["cache_hit"],
             "cost_usd": usage["cost_usd"], "citations": cited, "bad_citations": bad,
             "seconds": round(time.time() - started, 1), "answer": answer,
             # TS 版的 --json 没有这几项，所以用 get
-            "prompt_hash": out.get("prompt_hash"), "tools_hash": out.get("tools_hash"), "trace": out.get("trace")}
+            "prompt_hash": out.get("prompt_hash"), "tools_hash": out.get("tools_hash"), "trace": out.get("trace"),
+            "full_path_citations": full, **measured}
 
 
 def summarize(records: list[dict], questions: list[dict]) -> str:
@@ -105,6 +112,13 @@ def summarize(records: list[dict], questions: list[dict]) -> str:
                     f"撞上步数上限 {sum(r['stopped_by'] == 'max_steps' for r in ok)} 次，"
                     f"平均费用 ${sum(r['cost_usd'] for r in ok) / len(ok):.4f}，"
                     f"引用 {sum(r['citations'] for r in ok)} 处（无法核实 {sum(r['bad_citations'] for r in ok)}）")
+        traced = [r for r in ok if r.get("compactions") is not None]
+        if traced:  # 规划 12.4 的效率指标；TS 版没有轨迹，就不显示
+            n = len(traced)
+            complete = sum(r["full_path_citations"] for r in traced) / max(1, sum(r["citations"] for r in traced))
+            rows.append(f"引用完整率 {complete:.0%}，平均压缩 {sum(r['compactions'] for r in traced) / n:.1f} 次，"
+                        f"重读 {sum(r['rereads'] for r in traced) / n:.1f} 次，"
+                        f"峰值输入 {sum(r['peak_input_tokens'] for r in traced) / n:,.0f} token")
         versions = sorted({f"{r['prompt_hash']} / {r['tools_hash']}" for r in ok if r.get("prompt_hash")})
         if versions:  # 不止一个版本说明评测中途改了提示词或工具，结果不能直接合在一起比
             rows.append(f"提示词 / 工具版本：{'，'.join(versions)}")

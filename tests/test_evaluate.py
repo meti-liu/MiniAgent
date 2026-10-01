@@ -29,6 +29,8 @@ def test_run_one_reads_json_from_any_command(tmp_path):
     assert r["passed"] and r["model_calls"] == 2 and r["tool_calls"] == 1
     assert (r["citations"], r["bad_citations"]) == (1, 0)
     assert (r["prompt_hash"], r["tools_hash"], r["trace"]) == ("p1", "t1", "runs/traces/x.json")
+    assert r["full_path_citations"] == 1  # llm.py 就在仓库根目录，按原样写的路径能直接找到
+    assert r["compactions"] is None  # 轨迹文件不存在时，这几项没有数据
 
     broken = [sys.executable, "-c", "import sys; sys.exit('boom')"]
     assert "error" in run_one(broken, QUESTION, 0, data, timeout=30)
@@ -44,6 +46,10 @@ def test_summarize_reports_pass_rate():
 
     versioned = summarize([{**ok, "prompt_hash": "p1", "tools_hash": "t1"}], [QUESTION])
     assert "提示词 / 工具版本：p1 / t1" in versioned
+
+    measured = {**ok, "full_path_citations": 2, "compactions": 1, "rereads": 3, "peak_input_tokens": 9000}
+    line = summarize([measured, {**measured, "compactions": 0, "rereads": 1}], [QUESTION])
+    assert "引用完整率 50%" in line and "压缩 0.5 次" in line and "重读 2.0 次" in line and "峰值输入 9,000" in line
 
 
 def test_question_bank_is_well_formed():

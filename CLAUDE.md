@@ -40,6 +40,7 @@ meti 的个人学习仓库：一个最小的仓库问答 agent，目的是看懂
 ```bash
 python3 -m venv .venv && source .venv/bin/activate && pip install pytest
 python3 -m mini_agent "问题" --repo 路径 [--json] [--no-trace]   # 轨迹默认存到 runs/traces/
+python3 -m mini_agent "问题" --compaction summary --max-context 20000   # 压缩方式：trim（默认）/ clear / summary
 python3 -m mini_agent.trace runs/traces/某个文件.json [--full]  # 逐步回放一次运行
 python -m pytest -q
 python3 -m mini_agent.evaluate --repeat 3     # 用题库评测；--cmd 可以评测其他实现

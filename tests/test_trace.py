@@ -1,11 +1,10 @@
 """测试运行轨迹：每次模型调用都有记录、trim 前的原文保留下来、出错时也有记录、哈希能区分提示词版本、能回放、不含密钥。不联网。"""
 
 import json
-from functools import partial
 
 import pytest
 
-from mini_agent import context, trace
+from mini_agent import trace
 from mini_agent.agent import Settings, run
 from mini_agent.llm import LLMClient, LLMError
 from mini_agent.tools import Tools
@@ -61,11 +60,10 @@ def test_chat_logs_latency_usage_and_cost_per_call():
     assert entry["latency_ms"] >= 0 and entry["finish_reason"] == "stop"
 
 
-def test_transcript_keeps_original_tool_results_after_trim(tools, monkeypatch):
+def test_transcript_keeps_original_tool_results_after_trim(tools):
     # 把上限调到 50 字符，第 3 步之后最早的工具结果（下标 3）就会被换成占位符
-    monkeypatch.setattr(context, "trim", partial(context.trim, max_chars=50))
     llm = scripted_client(search(1), search(2), search(3), api_reply("done"))
-    result = run("q", llm, tools, "repo", on_step=lambda step: None)
+    result = run("q", llm, tools, "repo", on_step=lambda step: None, settings=Settings(max_context_chars=50))
     assert result.trimmed == [3]
     assert result.transcript[3]["role"] == "tool"
     assert result.transcript[3]["content"].startswith("app.py:1:")  # 原文，不是占位符
@@ -116,10 +114,10 @@ def test_prompt_hash_tells_prompt_versions_apart(tools):
     assert hashes[0]["tools_hash"] == hashes[1]["tools_hash"]
 
 
-def test_replay_marks_trimmed_results_and_the_forced_final_call(tools, monkeypatch):
-    monkeypatch.setattr(context, "trim", partial(context.trim, max_chars=50))
+def test_replay_marks_trimmed_results_and_the_forced_final_call(tools):
+    settings = Settings(max_context_chars=50)
     llm = scripted_client(search(1), search(2), search(3), api_reply("forced"))
-    result = run("q", llm, tools, "repo", max_steps=3, on_step=lambda step: None)
-    shown = trace.replay(trace.build("q", "repo", llm, tools, Settings(), 3, result.transcript, result))
+    result = run("q", llm, tools, "repo", max_steps=3, on_step=lambda step: None, settings=settings)
+    shown = trace.replay(trace.build("q", "repo", llm, tools, settings, 3, result.transcript, result))
     assert "后来被 trim 替换" in shown
     assert "tool_choice=none" in shown and "已达到步数上限" in shown

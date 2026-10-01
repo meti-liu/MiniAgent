@@ -14,6 +14,8 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from mini_agent.context import SUMMARY_HEADER
+
 PREVIEW_CHARS = 160
 
 
@@ -45,6 +47,7 @@ def build(question: str, repo_name: str, llm, tools, settings, max_steps: int,
         "model_calls": llm.call_log,
         "steps": [vars(step) for step in result.steps] if result else [],
         "trimmed": result.trimmed if result else [],
+        "compactions": result.compactions if result else [],
         "messages": transcript,
     }
 
@@ -56,6 +59,21 @@ def save(trace: dict, directory: Path) -> Path:
     path = directory / f"trace-{stamp}-{fingerprint(trace['question'])[:6]}.json"
     path.write_text(json.dumps(trace, ensure_ascii=False, indent=1), encoding="utf-8")
     return path
+
+
+def stats(trace: dict) -> dict:
+    """评测用的三个数：压缩次数、压缩后重读（和之前完全相同、但因为原结果被换掉而真正重新执行的调用）、
+    单次调用的最大输入 token（上下文峰值）。"""
+    seen, rereads = set(), 0
+    for step in trace["steps"]:
+        if step["tool"] is None:
+            continue
+        key = f"{step['tool']} {json.dumps(step['arguments'], sort_keys=True, ensure_ascii=False)}"
+        if key in seen and not step["repeated"]:
+            rereads += 1
+        seen.add(key)
+    peak = max((c["cache_hit"] + c["cache_miss"] for c in trace["model_calls"]), default=0)
+    return {"compactions": len(trace.get("compactions", [])), "rereads": rereads, "peak_input_tokens": peak}
 
 
 def replay(trace: dict, full: bool = False) -> str:
@@ -78,7 +96,11 @@ def replay(trace: dict, full: bool = False) -> str:
         elif message["role"] == "tool":
             note = "（后来被 trim 替换）" if index in trimmed else ""
             lines.append(f"  结果 {len(message['content'])} 字符{note}：{_preview(message['content'], full)}")
-        elif message["role"] == "user" and index > 1:  # 前两条是 system 和问题；之后的 user 只有 FINAL_PROMPT
+        elif message["role"] == "user" and message["content"].startswith(SUMMARY_HEADER):
+            number += 1  # 摘要也是一次模型调用，占一个编号
+            lines += ["", "[压缩] " + _call_header(number, trace["model_calls"]),
+                      "  摘要：" + _preview(message["content"][len(SUMMARY_HEADER):].strip(), full)]
+        elif message["role"] == "user" and index > 1:  # 前两条是 system 和问题；其余 user 是 FINAL_PROMPT
             lines += ["", "追加：" + message["content"]]
     if trace["error"]:
         lines += ["", f"出错：{trace['error']}"]
