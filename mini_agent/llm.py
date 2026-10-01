@@ -1,6 +1,7 @@
 """模型客户端：agent 里负责“问大脑”的那一段（对应 M1 的 Kernel 模型适配器）。
 
 把 messages 和工具定义 POST 给 DeepSeek，把回复解析成 Reply，并累计 token 用量和费用。
+每次调用的耗时、用量和费用另记一条到 call_log，写进运行轨迹（trace.py）。
 只用标准库 urllib，这样能直接看到 HTTP 请求和响应长什么样。
 """
 
@@ -57,7 +58,8 @@ class Usage:
     calls: int = 0
     cost_usd: float = 0.0  # 每次调用后按当时是否高峰累加
 
-    def add(self, raw: dict, now: datetime) -> None:
+    def add(self, raw: dict, now: datetime) -> float:
+        """累加一次调用的用量，返回这次的费用。"""
         hit = raw.get("prompt_cache_hit_tokens", 0)
         miss = raw.get("prompt_cache_miss_tokens", 0)
         out = raw.get("completion_tokens", 0)
@@ -69,6 +71,7 @@ class Usage:
         if is_peak(now):
             cost *= 2
         self.cost_usd += cost
+        return cost
 
 
 def parse_reply(data: dict) -> Reply:
@@ -101,6 +104,7 @@ class LLMClient:
         self.base_url = base_url
         self.timeout = timeout
         self.usage = Usage()
+        self.call_log: list[dict] = []  # 每次调用一条：耗时、用量、费用
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None,
              tool_choice: str = "auto") -> Reply:
@@ -113,9 +117,21 @@ class LLMClient:
         if tools:
             body["tools"] = tools
             body["tool_choice"] = tool_choice
+        started = time.monotonic()
         data = self._post(body)
-        self.usage.add(data.get("usage", {}), datetime.now(timezone.utc))
-        return parse_reply(data)
+        raw = data.get("usage", {})
+        cost = self.usage.add(raw, datetime.now(timezone.utc))
+        reply = parse_reply(data)
+        self.call_log.append({
+            "latency_ms": round((time.monotonic() - started) * 1000),
+            "cache_hit": raw.get("prompt_cache_hit_tokens", 0),
+            "cache_miss": raw.get("prompt_cache_miss_tokens", 0),
+            "output": raw.get("completion_tokens", 0),
+            "cost_usd": round(cost, 8),
+            "tool_choice": tool_choice if tools else None,
+            "finish_reason": reply.finish_reason,
+        })
+        return reply
 
     def _post(self, body: dict) -> dict:
         request = urllib.request.Request(

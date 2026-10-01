@@ -73,7 +73,9 @@ def run_one(cmd: list[str], question: dict, repeat: int, data: dict, timeout: in
             "model_calls": usage["calls"], "tool_calls": sum(1 for s in steps if s["tool"]),
             "input_tokens": usage["cache_hit"] + usage["cache_miss"], "cache_hit": usage["cache_hit"],
             "cost_usd": usage["cost_usd"], "citations": cited, "bad_citations": bad,
-            "seconds": round(time.time() - started, 1), "answer": answer}
+            "seconds": round(time.time() - started, 1), "answer": answer,
+            # TS 版的 --json 没有这几项，所以用 get
+            "prompt_hash": out.get("prompt_hash"), "tools_hash": out.get("tools_hash"), "trace": out.get("trace")}
 
 
 def summarize(records: list[dict], questions: list[dict]) -> str:
@@ -95,6 +97,9 @@ def summarize(records: list[dict], questions: list[dict]) -> str:
                     f"撞上步数上限 {sum(r['stopped_by'] == 'max_steps' for r in ok)} 次，"
                     f"平均费用 ${sum(r['cost_usd'] for r in ok) / len(ok):.4f}，"
                     f"引用 {sum(r['citations'] for r in ok)} 处（无法核实 {sum(r['bad_citations'] for r in ok)}）")
+        versions = sorted({f"{r['prompt_hash']} / {r['tools_hash']}" for r in ok if r.get("prompt_hash")})
+        if versions:  # 不止一个版本说明评测中途改了提示词或工具，结果不能直接合在一起比
+            rows.append(f"提示词 / 工具版本：{'，'.join(versions)}")
     if len(ok) < len(records):
         rows.append(f"失败 {len(records) - len(ok)} 次，详见 JSON。")
     return "\n".join(rows)

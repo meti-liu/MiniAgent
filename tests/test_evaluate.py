@@ -21,12 +21,14 @@ def test_run_one_reads_json_from_any_command(tmp_path):
     (tmp_path / "llm.py").write_text("a\nb\n", encoding="utf-8")
     out = {"answer": "is_peak 在 Usage.add（llm.py:1-2）", "stopped_by": "answer",
            "steps": [{"tool": "search"}, {"tool": None}],
-           "usage": {"calls": 2, "cache_hit": 10, "cache_miss": 90, "cost_usd": 0.001}}
+           "usage": {"calls": 2, "cache_hit": 10, "cache_miss": 90, "cost_usd": 0.001},
+           "prompt_hash": "p1", "tools_hash": "t1", "trace": "runs/traces/x.json"}
     fake_agent = [sys.executable, "-c", f"print({json.dumps(json.dumps(out))})"]  # 假装是另一种语言的 agent
     data = {"repos": {"demo": {"path": str(tmp_path)}}}
     r = run_one(fake_agent, QUESTION, 0, data, timeout=30)
     assert r["passed"] and r["model_calls"] == 2 and r["tool_calls"] == 1
     assert (r["citations"], r["bad_citations"]) == (1, 0)
+    assert (r["prompt_hash"], r["tools_hash"], r["trace"]) == ("p1", "t1", "runs/traces/x.json")
 
     broken = [sys.executable, "-c", "import sys; sys.exit('boom')"]
     assert "error" in run_one(broken, QUESTION, 0, data, timeout=30)
@@ -39,6 +41,9 @@ def test_summarize_reports_pass_rate():
     table = summarize([ok, bad, {"id": "q", "error": "x"}], [QUESTION])
     assert "| q | t | 1/2 | 3/4 | 3.0 | $0.0020 | is_peak |" in table
     assert "通过 1/2" in table and "失败 1 次" in table
+
+    versioned = summarize([{**ok, "prompt_hash": "p1", "tools_hash": "t1"}], [QUESTION])
+    assert "提示词 / 工具版本：p1 / t1" in versioned
 
 
 def test_question_bank_is_well_formed():

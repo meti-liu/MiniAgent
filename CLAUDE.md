@@ -34,10 +34,11 @@ meti 的个人学习仓库：一个最小的仓库问答 agent，目的是看懂
 - 比较费用时注意计价时段：本机 NZDT，UTC 06:00 起是高峰价 ×2，看 token 比看美元可靠
 - 下一步：`v2` 分支按 Plan.md 第 12 节做 A1 → A2 → B1 → C1 → D1 → W1（meti 已同意 A2 只读 MultiAgentOS 核实事实）
 
-## 本分支（main）怎么运行
+## 本分支（v2，和 main 相同的基础上）怎么运行
 ```bash
 python3 -m venv .venv && source .venv/bin/activate && pip install pytest
-python3 -m mini_agent "问题" --repo 路径 [--json]
+python3 -m mini_agent "问题" --repo 路径 [--json] [--no-trace]   # 轨迹默认存到 runs/traces/
+python3 -m mini_agent.trace runs/traces/某个文件.json [--full]  # 逐步回放一次运行
 python -m pytest -q
 python3 -m mini_agent.evaluate --repeat 3     # 用题库评测；--cmd 可以评测其他实现
 python3 -m mini_agent.ablate --repo 路径 "问题" ...

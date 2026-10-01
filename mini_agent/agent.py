@@ -3,6 +3,7 @@
 模型决定下一步 → 程序执行工具 → 结果喂回模型，直到模型不再调用工具（给出回答）或达到 max_steps。
 “一步”指一次模型调用；同一次调用里的多个工具调用共用一个步号，逐条打印。
 和之前完全相同的工具调用不再执行（见 _run_tool），Settings 集中放消融实验的开关。
+transcript 是只追加的完整记录（工具结果是 trim 之前的原文），用来写运行轨迹（trace.py）。
 """
 
 from __future__ import annotations
@@ -39,6 +40,8 @@ class RunResult:
     answer: str
     steps: list[Step]
     stopped_by: str  # "answer" | "max_steps"
+    transcript: list[dict]  # 所有消息的原文，顺序和下标与模型看到的 messages 一致
+    trimmed: list[int]  # 运行结束时已被 trim 换成占位符的消息下标
 
 
 def print_step(step: Step) -> None:
@@ -51,9 +54,13 @@ def print_step(step: Step) -> None:
 
 
 def run(question: str, llm, tools: Tools, repo_name: str,
-        max_steps: int = 10, on_step=print_step, settings: Settings = Settings()) -> RunResult:
+        max_steps: int = 10, on_step=print_step, settings: Settings = Settings(),
+        transcript: list[dict] | None = None) -> RunResult:
     overview = tools.overview(settings.overview)  # 开头就给出仓库概览
     messages = context.initial(question, repo_name, overview, strict=settings.strict_prompt)
+    # 调用方传入列表时，模型调用中途出错也能从这个列表拿到已经发生的部分
+    transcript = [] if transcript is None else transcript
+    transcript.extend(messages)
     specs = tools.specs()  # 整个运行过程中工具集不变，前缀才能命中缓存
     steps: list[Step] = []
     seen: dict[str, int] = {}  # 调用签名 -> 那次结果在 messages 里的下标
@@ -61,22 +68,29 @@ def run(question: str, llm, tools: Tools, repo_name: str,
     for number in range(1, max_steps + 1):
         reply = llm.chat(messages, specs)
         messages.append(reply.message)  # 让模型下一轮“记得”自己说过什么、调过什么
+        transcript.append(reply.message)
 
         if not reply.tool_calls:  # 没有工具调用 = 模型认为可以回答了
-            return _finish(reply.text, number, steps, "answer", on_step)
+            return _finish(reply.text, number, steps, "answer", on_step, messages, transcript)
 
         for call in reply.tool_calls:
             result, repeated = _run_tool(call, tools, messages, seen, settings.dedup)
-            messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
+            tool_message = {"role": "tool", "tool_call_id": call.id, "content": result}
+            messages.append(tool_message)
+            transcript.append(tool_message)
             step = Step(number, call.name, call.arguments, len(result), repeated)
             steps.append(step)
             on_step(step)
         messages = context.trim(messages)  # 太长时把最早的工具结果换成占位符
 
     # 步数用完：工具集照传，但禁止调用工具，逼模型基于已有信息作答
-    messages.append({"role": "user", "content": FINAL_PROMPT})
+    final_prompt = {"role": "user", "content": FINAL_PROMPT}
+    messages.append(final_prompt)
+    transcript.append(final_prompt)
     reply = llm.chat(messages, specs, tool_choice="none")
-    return _finish(reply.text, max_steps + 1, steps, "max_steps", on_step)
+    messages.append(reply.message)
+    transcript.append(reply.message)
+    return _finish(reply.text, max_steps + 1, steps, "max_steps", on_step, messages, transcript)
 
 
 def _run_tool(call, tools: Tools, messages: list[dict], seen: dict[str, int],
@@ -90,10 +104,13 @@ def _run_tool(call, tools: Tools, messages: list[dict], seen: dict[str, int],
     return tools.run(call.name, call.arguments), False  # 出错也只是返回 "ERROR: ..." 字符串
 
 
-def _finish(text: str | None, number: int, steps: list[Step],
-            stopped_by: str, on_step) -> RunResult:
+def _finish(text: str | None, number: int, steps: list[Step], stopped_by: str, on_step,
+            messages: list[dict], transcript: list[dict]) -> RunResult:
     answer = text or "(模型没有给出回答)"
     step = Step(number, None, None, len(answer))
     steps.append(step)
     on_step(step)
-    return RunResult(answer, steps, stopped_by)
+    # trim 只替换不删除，所以 messages 和 transcript 的下标一一对应
+    trimmed = [i for i, m in enumerate(messages)
+               if m["role"] == "tool" and m["content"].startswith("[已省略")]
+    return RunResult(answer, steps, stopped_by, transcript, trimmed)
