@@ -140,3 +140,14 @@ test("question bank is well formed", () => {
     for (const pattern of [...q.must.flat(), ...(q.must_not ?? [])]) new RegExp(pattern, "i");
   }
 });
+
+test("ma-orient accepts real ways of saying ORIENT is not implemented", () => {
+  const bank: Bank = JSON.parse(readFileSync(QUESTIONS_FILE, "utf8"));
+  const q = bank.questions.find((x) => x.id === "ma-orient")!;
+  const base = "ORIENT 生成仓库概览，默认不超过 2,500 token。";
+  // 第 7 轮里被漏判的两种说法（Runs.md），加上原来就能命中的说法
+  for (const said of ["目前它只存在于设计与文档中，TypeScript 实现里还没有。", "我没有看到已落地的实现代码。", "ORIENT 尚未实现。"]) {
+    assert.ok(grade(base + said, q).passed, said);
+  }
+  assert.ok(!grade(base + "ORIENT 已在 packages/context-engine 中实现。", q).passed);
+});
