@@ -64,3 +64,16 @@ def test_ma_orient_accepts_real_ways_of_saying_not_implemented():
     for said in ["目前它只存在于设计与文档中，TypeScript 实现里还没有。", "我没有看到已落地的实现代码。", "ORIENT 尚未实现。"]:
         assert grade(base + said, q)["passed"], said
     assert not grade(base + "ORIENT 已在 packages/context-engine 中实现。", q)["passed"]
+
+
+def test_check_pins_prints_how_to_create_a_missing_snapshot(tmp_path, capsys):
+    from mini_agent.evaluate import check_pins
+    data = {"repos": {"snap": {"path": str(tmp_path / "MultiAgentOS-abc1234"), "commit": "abc1234def",
+                               "source": "../MultiAgentOS"}}}
+    check_pins(data)
+    err = capsys.readouterr().err
+    assert "快照不存在" in err and "git -C" in err and "archive abc1234def" in err
+
+    (tmp_path / "MultiAgentOS-abc1234").mkdir()  # 快照存在：不是 git 仓库，也不该去查 HEAD
+    check_pins(data)
+    assert capsys.readouterr().err == ""

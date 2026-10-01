@@ -41,9 +41,17 @@ def repo_path(data: dict, name: str) -> Path:
 
 
 def check_pins(data: dict) -> None:
-    """题库里固定了 commit 的仓库，如果当前 HEAD 不同就提醒（答案里的事实可能已经变了）。"""
+    """题库里固定了 commit 的仓库，如果当前 HEAD 不同就提醒（答案里的事实可能已经变了）。
+    带 source 的仓库是用 git archive 导出的只读快照，不是 git 仓库：只检查它在不在，不在就打印创建命令。"""
     for name, repo in data["repos"].items():
         if "commit" not in repo:
+            continue
+        if "source" in repo:
+            path = repo_path(data, name)
+            if not path.is_dir():
+                print(f"提醒：{name} 的快照不存在，先运行：\n  mkdir -p {path} && "
+                      f"git -C {(ROOT / repo['source']).resolve()} archive {repo['commit']} | tar -x -C {path} && "
+                      f"chmod -R a-w {path}", file=sys.stderr)
             continue
         env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}  # 只读，不在别人的仓库里留下锁文件
         head = subprocess.run(["git", "-C", str(repo_path(data, name)), "rev-parse", "HEAD"],

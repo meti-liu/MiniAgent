@@ -2,12 +2,14 @@
   "version": 1,
   "notes": [
     "must：每一组是一个必须出现的事实，组内任意一个正则命中即可（不区分大小写）。must_not：出现就算错，用来抓编造。",
-    "fixture 是 mini-agent Python 实现在 a9b4441 的冻结副本，不随代码变化；multiagentos 固定在下面的 commit，HEAD 不同时评测脚本会提醒。",
+    "fixture 是 mini-agent Python 实现在 a9b4441 的冻结副本，不随代码变化；MultiAgentOS 的三个仓库是用 git archive 从 source 导出的只读快照（固定 commit），缺失时评测脚本会打印创建命令。",
     "所有事实都已对照源码核实过。"
   ],
   "repos": {
     "fixture": {"path": "evals/fixture"},
-    "multiagentos": {"path": "../MultiAgentOS", "commit": "52f3b3fd4304eb941b2635e07c7a6b7f8a261163"}
+    "multiagentos": {"path": "../eval-snapshots/MultiAgentOS-52f3b3f", "commit": "52f3b3fd4304eb941b2635e07c7a6b7f8a261163", "source": "../MultiAgentOS"},
+    "m0ce": {"path": "../eval-snapshots/MultiAgentOS-955aca0", "commit": "955aca06b14b9175a3969ea25519a45f884e4e18", "source": "../MultiAgentOS"},
+    "m1": {"path": "../eval-snapshots/MultiAgentOS-9b4b213", "commit": "9b4b2135c5a4780f73d9983d6cd1706f8add2252", "source": "../MultiAgentOS"}
   },
   "questions": [
     {
@@ -65,6 +67,57 @@
       "id": "fx-hard-multicall", "repo": "fixture", "type": "同一步多个工具调用（难）",
       "question": "如果模型在一次回复里同时调用了 3 个工具，其中第 2 个的参数不是合法 JSON，会发生什么？另外两个还会执行吗？",
       "must": [["_raw"], ["not valid JSON", "ERROR: arguments"], ["(另外|其他|其余|剩下|第 ?[13一三][^。\\n]{0,4}个)[^。\\n]{0,30}(照常|正常|仍然|仍|依然|继续|都会|也会|会被)[^。\\n]{0,10}执行"]]
+    },
+    {
+      "id": "m0-error-routing", "repo": "m0ce", "type": "跨文件：错误分流（难）",
+      "question": "在 experiments/minimal-agent-loop 里，ReviewAgent 的一次 file_read 失败（比如路径写错），和一次模型 API 返回 HTTP 503，分别会被怎么处理？",
+      "must": [["recordObservation", "(交还|返回|反馈|回传|喂回|告诉|发回)[^。\\n]{0,10}(给)?模型", "作为[^。\\n]{0,10}(工具结果|tool 消息|observation)"], ["retryable", "可重试"], ["(最多|共|一共|总共)[^。\\n]{0,8}3 ?次", "maxAttempts", "DEFAULT_MAX_ATTEMPTS"]]
+    },
+    {
+      "id": "m0-final-call", "repo": "m0ce", "type": "多跳因果链（难）",
+      "question": "在 experiments/minimal-agent-loop 里，ReviewAgent 的模型调用次数快用完时会发生什么？最后一次模型调用和平时的调用有什么不同？",
+      "must": [["\\b12\\b", "MAX_REVIEW_MODEL_CALLS"], ["submit_review"], ["tool_?choice", "toolChoice"], ["finalCall", "limit reached", "final call", "(末尾|最后)[^。\\n]{0,10}(追加|多|加)[^。\\n]{0,10}(一条)?[^。\\n]{0,6}(提示|消息)"]]
+    },
+    {
+      "id": "m0-reread-fix", "repo": "m0ce", "type": "文档结论 + 代码实现（难）",
+      "question": "experiments/minimal-agent-loop 的消融记录里，C1 阶段为什么经常重读已经读过的文件？后来代码里具体改了什么来解决？",
+      "must": [["看不到[^。\\n]{0,20}(自己|之前|先前|以前)", "(之前|以前|先前|上一轮)[^。\\n]{0,15}(tool_?call|工具调用|回复)", "一大段 JSON", "\\[system, ?一大段 JSON\\]"], ["turns", "保存[^。\\n]{0,10}(每轮|每一轮|之前|历史)[^。\\n]{0,10}(回复|assistant|消息)"], ["只追加|append-only|追加式|追加的消息"]]
+    },
+    {
+      "id": "m0-submit-checks", "repo": "m0ce", "type": "机制细节（难）",
+      "question": "在 experiments/minimal-agent-loop 里，ReviewAgent 提交审查报告时，程序会检查哪些条件？不满足时会怎样？",
+      "must": [["REVIEW_TOOL_REQUIRED", "纯文本"], ["REVIEW_EVIDENCE_REQUIRED", "(先|必须|至少)[^。\\n]{0,10}(读|读取)[^。\\n]{0,8}文件"], ["REVIEW_CITATIONS_REQUIRED", "至少[^。\\n]{0,6}(一|1)[^。\\n]{0,6}引用"], ["UNSUPPORTED_REVIEW_CITATION", "citationWasObserved", "(引用|citation)[^。\\n]{0,20}(读过|已读|已经读|observed)"], ["rejectTurn", "(交还|返回|反馈|回传|告诉|发回)[^。\\n]{0,10}(给)?模型", "(再|重新)[^。\\n]{0,6}(提交|调用)"]]
+    },
+    {
+      "id": "m0-missed-defect", "repo": "m0ce", "type": "文档 + 答案清单 + 源码（难）",
+      "question": "minimal-agent-loop 的 c-review 消融实验里，哪个缺陷几乎每次都被漏掉？它在测试仓库代码的哪里，具体是什么问题？",
+      "must": [["空(值|字符串)", "empty-value", "no digits", "没有数字"], ["strtol"], ["end\\s*==\\s*copy", "end[^。\\n]{0,20}(等于|==|指向)[^。\\n]{0,10}copy"], ["parser\\.c"]]
+    },
+    {
+      "id": "m0-id-pairing", "repo": "m0ce", "type": "代码 + 测试（难）",
+      "question": "在 experiments/minimal-agent-loop 里，ContextEngine 把工具结果放回对话时，如果不同轮次的工具调用用了相同的 id，会不会把结果配错？代码怎么处理，有没有测试覆盖？",
+      "must": [["used", "findIndex", "(没用过|未使用|尚未配对|没配对过|未配对)"], ["reused across turns", "minimal-agent-loop\\.test\\.ts"]]
+    },
+    {
+      "id": "m0-state-doc-gap", "repo": "m0ce", "type": "文档与代码不一致（难）",
+      "question": "experiments/minimal-agent-loop 的 README 里画的 PlannerAgent 状态转换，和代码里 Planner 实际经历的状态一致吗？",
+      "must": [["RUNNING"], ["(不一致|不符|没有经过|没进入|未进入|跳过|从未|不会进入|从来没有)[^。\\n]{0,30}(RUNNING|WAITING_UNIT)", "READY[^。\\n]{0,15}(直接|→|->)[^。\\n]{0,15}WAITING_UNIT", "RUNNING[^。\\n]{0,30}(没有|未|从未|不会)[^。\\n]{0,10}(出现|进入|设置|经过)"]],
+      "must_not": ["完全一致"]
+    },
+    {
+      "id": "m1-draft-vs-sealed", "repo": "m1", "type": "版本管理规则（难）",
+      "question": "packages/agent-tool-pool 里，v0.x 版本和 v1.0.0 以后的版本，定义文件的修改规则有什么不同？改了一个已经封存的定义文件会怎样？",
+      "must": [["草稿|draft", "v0\\.x[^。\\n]{0,20}(直接|原地|就地)"], ["catalog:seal", "\\bseal"], ["DIGEST_MISMATCH"], ["新版本|new version|(发布|publish)[^。\\n]{0,10}(一个)?新"]]
+    },
+    {
+      "id": "m1-revoke", "repo": "m1", "type": "跨文件：策略和代码（难）",
+      "question": "packages/agent-tool-pool 里，一个已发布的定义版本被发现有风险，怎么停用它？停用之后，还能查到或固定（pin）引用了它的 Agent 吗？",
+      "must": [["status\\.yaml"], ["QUARANTINED|REVOKED"], ["(不能|无法|拒绝|不可|不允许)[^。\\n]{0,15}(固定|pin)", "refuses? to pin", "definitionUnavailable|DEFINITION_UNAVAILABLE"]]
+    },
+    {
+      "id": "m1-model-gap", "repo": "m1", "type": "契约与实现的差距（难）",
+      "question": "这个仓库的 M1 正式代码里（packages 和 apps），一个 executionKind 为 MODEL 的执行单元交给 Kernel 后会发生什么？",
+      "must": [["LocalReadExecutor"], ["unsupported", "不支持"], ["(没有|未|尚未|并未|还没)[^。\\n]{0,20}(调用|实现|接入|对接)[^。\\n]{0,10}模型", "(没有|未|尚未|并未|还没)[^。\\n]{0,15}(模型适配|ModelExecutor|model adapter|模型执行器)"]]
     },
     {
       "id": "ma-entry", "repo": "multiagentos", "type": "找未知实现（无关键词）",
