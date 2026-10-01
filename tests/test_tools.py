@@ -55,7 +55,7 @@ def test_search_does_not_follow_links_into_skipped_files(repo):
 
 def test_skipped_names_ignore_case(repo):
     # 在 macOS 上 .GIT/config 就是 .git/config；这里直接建大写目录来模拟
-    (repo / ".GIT").mkdir()
+    (repo / ".GIT").mkdir(exist_ok=True)  # macOS 不区分大小写时 .GIT 就是已存在的 .git
     (repo / ".GIT" / "config").write_text("x\n", encoding="utf-8")
     (repo / ".ENV.local").write_text("x\n", encoding="utf-8")
     tools = Tools(repo)

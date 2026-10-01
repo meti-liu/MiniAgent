@@ -35,10 +35,18 @@ RUNS_DIR = Path(__file__).resolve().parent.parent / "runs"
 
 
 def check_citations(answer: str, tools: Tools) -> tuple[int, int]:
-    """返回 (引用数, 无法核实数)。只查文件在不在、行号在不在范围内，查不出“结论错误”。"""
+    """返回 (引用数, 无法核实数)。只查文件在不在、行号在不在范围内，查不出“结论错误”。
+
+    模型常在写过一次完整路径后改用简写（如 `agent.py:42`），这时按同一回答里唯一对得上的完整路径补全。
+    """
     cited = set(CITATION.findall(answer))
+    full_paths = {path for path, _, _ in cited if "/" in path}
     bad = 0
     for path, start, end in cited:
+        if "/" not in path:
+            candidates = [p for p in full_paths if p.endswith("/" + path)]
+            if len(candidates) == 1:
+                path = candidates[0]
         try:
             target = tools._resolve(path)
             total = len(tools._read_text(target).splitlines()) if target.is_file() else 0

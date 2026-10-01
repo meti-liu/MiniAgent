@@ -8,6 +8,10 @@ def test_check_citations_counts_missing_files_and_out_of_range_lines(tmp_path):
     (tmp_path / "a.py").write_text("1\n2\n3\n", encoding="utf-8")
     answer = "见 `a.py:1-2`、`a.py:5`、`missing.py:1`，以及中文紧挨着a.py:2"
     assert check_citations(answer, Tools(tmp_path)) == (4, 2)  # a.py:5 越界，missing.py 不存在
+    # 简写按同一回答里的完整路径补全；对不上唯一路径的简写仍算无法核实
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "b.py").write_text("1\n2\n", encoding="utf-8")
+    assert check_citations("见 src/b.py:1，后面又说 b.py:2 和 c.py:1", Tools(tmp_path)) == (3, 1)
 
 
 def test_summarize_averages_per_config():
