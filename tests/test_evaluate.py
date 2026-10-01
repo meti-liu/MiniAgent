@@ -49,3 +49,13 @@ def test_question_bank_is_well_formed():
         assert q["repo"] in data["repos"] and q["must"]
         for pattern in [p for group in q["must"] for p in group] + q.get("must_not", []):
             re.compile(pattern)
+
+
+def test_ma_orient_accepts_real_ways_of_saying_not_implemented():
+    data = json.loads(QUESTIONS_FILE.read_text(encoding="utf-8"))
+    q = next(x for x in data["questions"] if x["id"] == "ma-orient")
+    base = "ORIENT 生成仓库概览，默认不超过 2,500 token。"
+    # 第 7 轮里被漏判的两种说法（Runs.md），加上原来就能命中的说法
+    for said in ["目前它只存在于设计与文档中，TypeScript 实现里还没有。", "我没有看到已落地的实现代码。", "ORIENT 尚未实现。"]:
+        assert grade(base + said, q)["passed"], said
+    assert not grade(base + "ORIENT 已在 packages/context-engine 中实现。", q)["passed"]
