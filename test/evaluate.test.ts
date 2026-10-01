@@ -1,7 +1,7 @@
 /** 测试 LLM 解析、消融和评测脚本里不联网的部分。 */
 
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
@@ -76,6 +76,10 @@ test("checkCitations counts missing files and out-of-range lines", () => {
   write(path.join(dir, "a.py"), "1\n2\n3\n");
   const answer = "见 `a.py:1-2`、`a.py:5`、`missing.py:1`，以及中文紧挨着a.py:2";
   assert.deepEqual(checkCitations(answer, new Tools(dir)), [4, 2]);
+  // 简写按同一回答里的完整路径补全；对不上唯一路径的简写仍算无法核实
+  mkdirSync(path.join(dir, "src"));
+  write(path.join(dir, "src", "b.py"), "1\n2\n");
+  assert.deepEqual(checkCitations("见 src/b.py:1，后面又说 b.py:2 和 c.py:1", new Tools(dir)), [3, 1]);
 });
 
 test("ablation summary averages per config", () => {

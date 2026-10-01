@@ -50,7 +50,8 @@ for (const p of ["../outside.txt", "/etc/passwd", "link.txt", "src/../../outside
 }
 
 test("skipped paths are rejected, ignoring case", () => {
-  mkdirSync(path.join(repo, ".GIT"));
+  // macOS 默认不区分大小写，.GIT 就是已经存在的 .git，所以允许目录已存在
+  mkdirSync(path.join(repo, ".GIT"), { recursive: true });
   write(path.join(repo, ".GIT", "config"), "x\n");
   write(path.join(repo, ".ENV.local"), "x\n");
   const tools = new Tools(repo);

@@ -27,12 +27,21 @@ const CITATION = /([A-Za-z0-9_./-]+\.[A-Za-z0-9]+):(\d+)(?:-(\d+))?/g;
 export const ROOT = fileURLToPath(new URL("..", import.meta.url));
 export const RUNS_DIR = path.join(ROOT, "runs");
 
-/** 返回 [引用数, 无法核实数]。只查文件在不在、行号在不在范围内，查不出“结论错误”。 */
+/**
+ * 返回 [引用数, 无法核实数]。只查文件在不在、行号在不在范围内，查不出“结论错误”。
+ * 模型常在写过一次完整路径后改用简写（如 `agent.py:42`），这时按同一回答里唯一对得上的完整路径补全。
+ */
 export function checkCitations(answer: string, tools: Tools): [number, number] {
-  const cited = new Set([...answer.matchAll(CITATION)].map((m) => `${m[1]}:${m[2]}:${m[3] ?? ""}`));
+  const matches = [...answer.matchAll(CITATION)];
+  const fullPaths = [...new Set(matches.map((m) => m[1]!).filter((p) => p.includes("/")))];
+  const cited = new Set(matches.map((m) => `${m[1]}:${m[2]}:${m[3] ?? ""}`));
   let bad = 0;
   for (const key of cited) {
-    const [file, start, end] = key.split(":") as [string, string, string];
+    let [file, start, end] = key.split(":") as [string, string, string];
+    if (!file.includes("/")) {
+      const candidates = fullPaths.filter((p) => p.endsWith(`/${file}`));
+      if (candidates.length === 1) file = candidates[0]!;
+    }
     let total = 0;
     try {
       total = splitLines(tools.readText(tools.resolve(file))).length;
