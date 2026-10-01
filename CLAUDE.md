@@ -24,6 +24,7 @@ meti 的个人学习仓库：一个最小的仓库问答 agent，目的是看懂
 - `main`：Python 实现
 - `ts-port`：TypeScript 实现（Plan.md 第 11 节），和 Python 版行为、CLI、`--json` 格式一致
 - 两个分支共用 `evals/questions.json` 题库，改题库时两边要同步
+- `v2`：从 `main` 分出，只做 Python，把主流 agent 技术逐个加进来并量化（Plan.md 第 12 节）；v2 新增的题目只放在本分支
 
 ## 当前进度（2026-10-01）
 - Plan.md 第 7 节 0–13 步都已完成
@@ -31,7 +32,7 @@ meti 的个人学习仓库：一个最小的仓库问答 agent，目的是看懂
 - TS 版和 Python 基线行为一致（ts-port 分支 Runs.md 第 7 轮）
 - 第 13 步加了 5 道 fixture 难题，修正打分后两个实现都是 15/15（Runs.md 第 8 轮）：fixture 太小，难不起来
 - 比较费用时注意计价时段：本机 NZDT，UTC 06:00 起是高峰价 ×2，看 token 比看美元可靠
-- 下一步候选（Plan.md 第 9 节）：在 MultiAgentOS 上出难题（要 meti 同意读它）；给回答质量打分
+- 下一步：`v2` 分支按 Plan.md 第 12 节做 A1 → A2 → B1 → C1 → D1 → W1（meti 已同意 A2 只读 MultiAgentOS 核实事实）
 
 ## 本分支（main）怎么运行
 ```bash
