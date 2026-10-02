@@ -15,6 +15,7 @@ from mini_agent import context
 from mini_agent.tools import Tools
 
 FINAL_PROMPT = "已达到步数上限。请根据已获得的信息直接回答，不要再调用工具。"
+COMPACTION_COOLDOWN = 2  # 一次压缩后仍超限，接下来几步不再压缩，免得每一步都改动前缀（规划 12.5 的 B1.1）
 REPEAT_NOTE = "NOTE: 这个调用和前面某次完全相同，结果就在上文，没有重新执行。请换参数，或根据已有信息回答。"
 
 
@@ -68,6 +69,7 @@ def run(question: str, llm, tools: Tools, repo_name: str,
     steps: list[Step] = []
     seen: dict[str, int] = {}  # 调用签名 -> 那次结果在 messages 里的下标
     compactions: list[dict] = []
+    cooldown = 0  # 还要跳过几步压缩
 
     for number in range(1, max_steps + 1):
         reply = llm.chat(messages, specs)
@@ -85,9 +87,14 @@ def run(question: str, llm, tools: Tools, repo_name: str,
             step = Step(number, call.name, call.arguments, len(result), repeated)
             steps.append(step)
             on_step(step)
+        if cooldown > 0:
+            cooldown -= 1
+            continue
         messages, event = context.compact(messages, settings.compaction, settings.max_context_chars, llm, specs)
         if event:
             compactions.append({"after_step": number, **event})
+            if event["chars_after"] > settings.max_context_chars:  # 压缩了也降不下来：先停几步
+                cooldown = COMPACTION_COOLDOWN
             if event["kind"] == "summary":
                 transcript.append(messages[2])  # 摘要那条消息也记进原始记录，回放时能看到
                 seen.clear()  # 消息下标变了；被摘要掉的调用允许重新执行

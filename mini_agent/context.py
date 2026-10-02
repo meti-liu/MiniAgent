@@ -30,7 +30,6 @@ STRICT_RULES = """
 
 SYSTEM_PROMPT = BASE_PROMPT + STRICT_RULES
 
-KEEP_RECENT = 4  # 最近几条消息不裁剪
 
 SUMMARY_HEADER = "【之前步骤的摘要】"
 SUMMARY_PROMPT = """上下文太长了。请把到目前为止的工作写成摘要，用来替换之前的对话，之后你只能看到这份摘要和最近的几步。
@@ -66,14 +65,14 @@ def trim(messages: list[dict], max_chars: int = 60_000, target_chars: int | None
     """超过 max_chars 时，从最早的 tool 结果开始换成占位符，直到降到 target_chars（默认等于 max_chars）。
 
     只替换 tool 消息的内容、不删除消息，这样 tool_calls 和 tool 结果依然成对。
-    system、用户问题（前两条）和最近 KEEP_RECENT 条消息不动。
+    system、用户问题（前两条）和受保护的最近部分（见 _protected_start）不动。
     """
     total = sum(_size(m) for m in messages)
     if total <= max_chars:
         return messages
     target = max_chars if target_chars is None else target_chars
     trimmed = list(messages)  # 不修改调用方传进来的列表
-    for i in range(2, len(trimmed) - KEEP_RECENT):
+    for i in range(2, _protected_start(messages, max_chars)):
         if total <= target:
             break
         message = trimmed[i]
@@ -97,18 +96,35 @@ def compact(messages: list[dict], strategy: str, max_chars: int,
     target = max_chars // 2 if strategy == "clear" else max_chars  # clear 一次清得多，之后很多步都不用再改前缀
     compacted = trim(messages, max_chars, target)
     replaced = sum(1 for old, new in zip(messages, compacted) if old is not new)
-    if replaced == 0:  # 能换的都换过了（剩下的都在最近 KEEP_RECENT 条里）
+    if replaced == 0:  # 能换的都换过了（剩下的都在受保护部分里）
         return compacted, None
     return compacted, {"kind": strategy, "replaced": replaced, "chars_before": before,
                        "chars_after": sum(_size(m) for m in compacted)}
 
 
+def _protected_start(messages: list[dict], max_chars: int) -> int:
+    """受保护部分从哪个下标开始。最新一轮（最后一条 assistant 和它的全部工具结果）模型还没看过，无条件保护；
+    更早的消息从后往前累加，总共不超过 max_chars 的一半。按大小而不是条数算，否则几次大的读文件就会让每一步都要压缩。"""
+    start = len(messages)
+    for i in range(len(messages) - 1, 1, -1):
+        if messages[i]["role"] == "assistant":
+            start = i
+            break
+    kept = sum(_size(m) for m in messages[start:])
+    while start > 2 and kept + _size(messages[start - 1]) <= max_chars // 2:
+        start -= 1
+        kept += _size(messages[start])
+    return start
+
+
 def _summarize(messages: list[dict], llm, specs, before: int, max_chars: int) -> tuple[list[dict], dict | None]:
-    """把 system、问题之后、最近 KEEP_RECENT 条之前的消息换成一条摘要。"""
-    cut = len(messages) - KEEP_RECENT
-    while cut > 2 and messages[cut]["role"] == "tool":  # 切分点不能把 tool_calls 和它的结果拆开
-        cut -= 1
+    """把 system、问题之后、受保护部分之前的消息换成一条摘要。"""
+    cut = _protected_start(messages, max_chars)
+    while messages[cut]["role"] == "tool":  # 不能把 tool_calls 和它的结果拆开：往后挪到下一条 assistant，宁可少保护一点
+        cut += 1
     if cut <= 2:
+        return messages, None
+    if sum(_size(m) for m in messages[2:cut]) < max_chars // 4:  # 换掉的太少，一份摘要（实测平均 3.7k 字符）省不下什么
         return messages, None
     # 前缀和主对话完全相同、工具照传但禁止调用，所以这次请求的大部分输入都能命中缓存
     reply = llm.chat(messages[:cut] + [{"role": "user", "content": SUMMARY_PROMPT}], specs, tool_choice="none")
