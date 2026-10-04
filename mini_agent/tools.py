@@ -1,6 +1,7 @@
 """工具箱：agent 的“手”（对应 M1 的 AgentToolPool + 只读 Executor）。
 
-三个只读工具 list_dir / search / read_file，结果都是字符串，直接作为 tool 消息喂回模型。
+三个只读工具 list_dir / search / read_file，结果都是字符串，直接作为 tool 消息喂回模型；
+打开 C1 检索时多一个 retrieve，概览里可以加符号表（见 retrieval.py）。
 出错时返回 "ERROR: ..." 而不是抛异常，让模型看到错误后自己调整；所有路径都被限制在仓库目录内。
 """
 
@@ -9,6 +10,8 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
+
+from mini_agent import retrieval
 
 SKIP_NAMES = {".git", "node_modules", ".venv", "__pycache__", ".pytest_cache", "dist"}
 MAX_FILE_BYTES = 1_000_000
@@ -53,8 +56,9 @@ def _function(name: str, description: str, properties: dict, required: list[str]
 class Tools:
     def __init__(self, root: Path):
         self.root = Path(root).resolve()
+        self._index: retrieval.BM25Index | None = None  # 第一次 retrieve 时才建
 
-    def specs(self) -> list[dict]:
+    def specs(self, retrieve: bool = False) -> list[dict]:
         path = {"type": "string", "description": "相对仓库根目录的路径，默认 ."}
         return [
             _function("list_dir", "列出目录下的文件和子目录（目录以 / 结尾）。用来了解仓库结构。",
@@ -67,10 +71,16 @@ class Tools:
                        "start": {"type": "integer", "description": "起始行，从 1 开始，默认 1"},
                        "end": {"type": "integer", "description": "结束行（包含），默认 start+199"}},
                       ["path"]),
-        ]
+        ] + ([_function(
+            "retrieve", "按自然语言或关键词在全仓库检索，返回最相关的代码和文档片段（路径:起始行-结束行，加开头几行）。"
+            "不确定该搜什么关键词、或问题比较开放时用它，再用 read_file 读需要的行。"
+            "按词匹配，不懂近义词和翻译：代码里的标识符多是英文，查代码时用英文关键词或标识符。",
+            {"query": {"type": "string", "description": "想找的内容，可以是一句话或几个关键词"}}, ["query"])]
+            if retrieve else [])
 
     def run(self, name: str, arguments: dict) -> str:
-        handlers = {"list_dir": self.list_dir, "search": self.search, "read_file": self.read_file}
+        handlers = {"list_dir": self.list_dir, "search": self.search, "read_file": self.read_file,
+                    "retrieve": self.retrieve}
         if name not in handlers:
             return f"ERROR: unknown tool {name!r}"
         if "_raw" in arguments:
@@ -164,15 +174,33 @@ class Tools:
         header = f"{target.relative_to(self.root).as_posix()}（第 {start}-{min(end, len(lines))} 行，共 {len(lines)} 行）"
         return "\n".join([header, *body])
 
+    def retrieve(self, query: str) -> str:
+        if self._index is None:
+            self._index = retrieval.BM25Index(self._text_files())
+        return retrieval.format_hits(self._index.search(query))
+
+    def _text_files(self):
+        """仓库里所有允许读的文本文件，(相对路径, 内容)；和 search 用同一套沙箱和跳过规则。"""
+        for file in self._files_under(self.root):
+            try:
+                text = self._read_text(file)
+            except ToolError:
+                continue
+            yield file.relative_to(self.root).as_posix(), text
+
     # ---- 仓库概览：运行开始时放进第一条用户消息，不在 specs() 里，模型不能调用 ----
 
-    def overview(self, mode: str = "full") -> str:
-        """对应 M1 的 ORIENT。full = 目录树 + 根目录的说明和清单文件开头；tree = 只有目录树；none = 空。"""
+    def overview(self, mode: str = "full", repomap: bool = False) -> str:
+        """对应 M1 的 ORIENT。full = 目录树 + 根目录的说明和清单文件开头；tree = 只有目录树；none = 空。
+        repomap 再加一张符号表（C1）：它在第一条消息里、属于固定前缀，第二次调用起基本都是缓存命中。"""
         if mode == "none":
             return ""
         sections = [f"【目录树，深度 ≤{OVERVIEW_DEPTH}，每个目录最多 {OVERVIEW_PER_DIR} 项】\n{self._tree()}"]
         if mode == "full":
             sections += self._head_sections()
+        if repomap:
+            sections.append(f"【符号表：顶层定义和行号，最多 {retrieval.REPOMAP_MAX_CHARS} 字符】\n"
+                            f"{retrieval.repo_map(self._text_files())}")
         return "\n\n".join(sections)
 
     def _head_sections(self) -> list[str]:

@@ -27,6 +27,7 @@ class Settings:
     strict_prompt: bool = True  # 系统提示词是否包含 STRICT_RULES
     compaction: str = "clear"  # 超限时怎么压缩："clear" | "trim" | "summary"（规划 12.5；第 12 轮之后默认 clear）
     max_context_chars: int = 60_000  # 上下文超过这么多字符就压缩
+    retrieval: str = "none"  # 检索辅助："none" | "bm25"（多一个 retrieve 工具）| "repomap"（概览里加符号表），规划 12.6
 
 
 @dataclass
@@ -60,12 +61,12 @@ def print_step(step: Step) -> None:
 def run(question: str, llm, tools: Tools, repo_name: str,
         max_steps: int = 10, on_step=print_step, settings: Settings = Settings(),
         transcript: list[dict] | None = None) -> RunResult:
-    overview = tools.overview(settings.overview)  # 开头就给出仓库概览
+    overview = tools.overview(settings.overview, repomap=settings.retrieval == "repomap")  # 开头就给出仓库概览
     messages = context.initial(question, repo_name, overview, strict=settings.strict_prompt)
     # 调用方传入列表时，模型调用中途出错也能从这个列表拿到已经发生的部分
     transcript = [] if transcript is None else transcript
     transcript.extend(messages)
-    specs = tools.specs()  # 整个运行过程中工具集不变，前缀才能命中缓存
+    specs = tools.specs(retrieve=settings.retrieval == "bm25")  # 整个运行过程中工具集不变，前缀才能命中缓存
     steps: list[Step] = []
     seen: dict[str, int] = {}  # 调用签名 -> 那次结果在 messages 里的下标
     compactions: list[dict] = []

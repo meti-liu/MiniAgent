@@ -30,6 +30,8 @@ def run() -> None:
     parser.add_argument("--compaction", choices=["trim", "clear", "summary"], default="clear",
                         help="上下文超限时怎么压缩（规划 12.5）")
     parser.add_argument("--max-context", type=int, default=60_000, help="上下文超过这么多字符就压缩")
+    parser.add_argument("--retrieval", choices=["none", "bm25", "repomap"], default="none",
+                        help="检索辅助（规划 12.6）")
     parser.add_argument("--no-trace", action="store_true", help="不保存运行轨迹")
     args = parser.parse_args()
 
@@ -44,7 +46,8 @@ def run() -> None:
 
     llm = LLMClient(api_key, model=args.model)
     tools = Tools(root)
-    settings = agent.Settings(compaction=args.compaction, max_context_chars=args.max_context)
+    settings = agent.Settings(compaction=args.compaction, max_context_chars=args.max_context,
+                              retrieval=args.retrieval)
     transcript: list[dict] = []  # 自己持有这个列表，模型调用出错时也能存下已经发生的部分
     try:
         on_step = (lambda step: None) if args.json else agent.print_step
