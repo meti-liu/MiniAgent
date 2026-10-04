@@ -81,12 +81,12 @@
     {
       "id": "m0-reread-fix", "repo": "m0ce", "type": "文档结论 + 代码实现（难）",
       "question": "experiments/minimal-agent-loop 的消融记录里，C1 阶段为什么经常重读已经读过的文件？后来代码里具体改了什么来解决？",
-      "must": [["看不到[^。\\n]{0,20}(自己|之前|先前|以前)", "(之前|以前|先前|上一轮)[^。\\n]{0,15}(tool_?call|工具调用|回复)", "一大段 JSON", "\\[system, ?一大段 JSON\\]"], ["turns", "保存[^。\\n]{0,10}(每轮|每一轮|之前|历史)[^。\\n]{0,10}(回复|assistant|消息)"], ["只追加|append-only|追加式|追加的消息"]]
+      "must": [["看不到[^。\\n]{0,20}(自己|之前|先前|以前)", "(之前|以前|先前|上一轮)[^。\\n]{0,15}(tool_?call|工具调用|回复)", "一大段 JSON", "\\[system, ?一大段 JSON\\]"], ["turns", "保存[^。\\n]{0,10}(每轮|每一轮|之前|历史)[^。\\n]{0,10}(回复|assistant|消息)"], ["只追加|append-only|追加式|追加的消息|消息列表", "(回放|重放)[^。\\n]{0,10}(消息|历史|轮)"]]
     },
     {
       "id": "m0-submit-checks", "repo": "m0ce", "type": "机制细节（难）",
       "question": "在 experiments/minimal-agent-loop 里，ReviewAgent 提交审查报告时，程序会检查哪些条件？不满足时会怎样？",
-      "must": [["REVIEW_TOOL_REQUIRED", "纯文本"], ["REVIEW_EVIDENCE_REQUIRED", "(先|必须|至少)[^。\\n]{0,10}(读|读取)[^。\\n]{0,8}文件"], ["REVIEW_CITATIONS_REQUIRED", "至少[^。\\n]{0,6}(一|1)[^。\\n]{0,6}引用"], ["UNSUPPORTED_REVIEW_CITATION", "citationWasObserved", "(引用|citation)[^。\\n]{0,20}(读过|已读|已经读|observed)"], ["rejectTurn", "(交还|返回|反馈|回传|告诉|发回)[^。\\n]{0,10}(给)?模型", "(再|重新)[^。\\n]{0,6}(提交|调用)"]]
+      "must": [["REVIEW_TOOL_REQUIRED", "纯文本"], ["REVIEW_EVIDENCE_REQUIRED", "(先|必须|至少)[^。\\n]{0,10}(读|读取)[^。\\n]{0,8}文件"], ["REVIEW_CITATIONS_REQUIRED", "至少[^。\\n]{0,6}(一|1)[^。\\n]{0,6}引用"], ["UNSUPPORTED_REVIEW_CITATION", "citationWasObserved", "(引用|citation)[^。\\n]{0,20}(读过|已读|已经读|observed)"], ["rejectTurn", "(交还|交回|退回|返回|反馈|回传|告诉|发回)[^。\\n]{0,10}(给)?模型", "(再|重新)[^。\\n]{0,6}(提交|调用)"]]
     },
     {
       "id": "m0-missed-defect", "repo": "m0ce", "type": "文档 + 答案清单 + 源码（难）",
@@ -117,7 +117,7 @@
     {
       "id": "m1-model-gap", "repo": "m1", "type": "契约与实现的差距（难）",
       "question": "这个仓库的 M1 正式代码里（packages 和 apps），一个 executionKind 为 MODEL 的执行单元交给 Kernel 后会发生什么？",
-      "must": [["LocalReadExecutor"], ["unsupported", "不支持"], ["(没有|未|尚未|并未|还没|不会|不)[^。\\n]{0,20}(调用|执行|实现|接入|对接)[^。\\n]{0,10}(模型|MODEL)", "(没有|不存在|缺少)[^。\\n]{0,20}(模型|MODEL)[^。\\n]{0,10}(调用|执行)?(能力|路径|adapter|适配|实现)", "(模型|MODEL)[^。\\n]{0,20}(尚未|未|没有|并未)(真正)?(实现|接入|对接)", "不支持[^。\\n]{0,10}(MODEL|模型)", "尚未实现的能力"]]
+      "must": [["LocalReadExecutor"], ["unsupported", "不支持"], ["(没有|未|尚未|并未|还没|不会|不)[^。\\n]{0,20}(调用|执行|实现|接入|对接)[^。\\n]{0,10}(模型|MODEL)", "(没有|不存在|缺少)[^。\\n]{0,20}(模型|MODEL)[^。\\n]{0,10}(调用|执行)?(能力|路径|adapter|适配|实现)", "(模型|MODEL)[^。\\n]{0,20}(尚未|未|没有|并未)(真正)?(实现|接入|对接)", "不支持[^。\\n]{0,10}(MODEL|模型)", "尚未实现的能力", "(未|没有|没)[^。\\n]{0,30}(搜索到|找到|看到|发现)[^。\\n]{0,25}(MODEL|模型)"]]
     },
     {
       "id": "ma-entry", "repo": "multiagentos", "type": "找未知实现（无关键词）",
