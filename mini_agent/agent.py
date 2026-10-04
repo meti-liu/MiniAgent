@@ -25,7 +25,7 @@ class Settings:
     overview: str = "full"  # "full" | "tree" | "none"
     dedup: bool = True  # 跳过和之前完全相同的工具调用
     strict_prompt: bool = True  # 系统提示词是否包含 STRICT_RULES
-    compaction: str = "trim"  # 超限时怎么压缩："trim" | "clear" | "summary"（规划 12.5）
+    compaction: str = "clear"  # 超限时怎么压缩："clear" | "trim" | "summary"（规划 12.5；第 12 轮之后默认 clear）
     max_context_chars: int = 60_000  # 上下文超过这么多字符就压缩
 
 

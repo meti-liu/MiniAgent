@@ -27,7 +27,7 @@ def run() -> None:
     parser.add_argument("--model", default="deepseek-flash")
     parser.add_argument("--json", action="store_true", help="只输出一行 JSON，供评测脚本读取")
     parser.add_argument("--trace-dir", default="runs/traces", help="运行轨迹的保存目录")
-    parser.add_argument("--compaction", choices=["trim", "clear", "summary"], default="trim",
+    parser.add_argument("--compaction", choices=["trim", "clear", "summary"], default="clear",
                         help="上下文超限时怎么压缩（规划 12.5）")
     parser.add_argument("--max-context", type=int, default=60_000, help="上下文超过这么多字符就压缩")
     parser.add_argument("--no-trace", action="store_true", help="不保存运行轨迹")

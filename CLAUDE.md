@@ -34,14 +34,14 @@ meti 的个人学习仓库：一个最小的仓库问答 agent，目的是看懂
 - 比较费用时注意计价时段：本机 NZDT，UTC 06:00 起是高峰价 ×2，看 token 比看美元可靠
 - v2：A1 运行轨迹、A2 大仓库难题集已完成（Runs.md 第 9、10 轮）；A2 修正打分后 30/30，正确率饱和，后续看效率和引用完整率（Plan.md 12.4）
 - MultiAgentOS 题读的是 `../eval-snapshots/` 下的只读快照（git archive 导出），不是 meti 的工作目录
-- B1 记忆压缩和 B1.1 修抖动已完成（Runs.md 第 11、12 轮）：窗口内压缩是成本；需要压缩时 clear 最省、summary 正确率最好；默认仍是 trim + 60k
+- B1 记忆压缩和 B1.1 修抖动已完成（Runs.md 第 11、12 轮）：窗口内压缩是成本；需要压缩时 clear 最省、summary 正确率最好；默认改为 clear + 60k
 - 下一步：C1 检索三路对比 → D1 → W1
 
 ## 本分支（v2，和 main 相同的基础上）怎么运行
 ```bash
 python3 -m venv .venv && source .venv/bin/activate && pip install pytest
 python3 -m mini_agent "问题" --repo 路径 [--json] [--no-trace]   # 轨迹默认存到 runs/traces/
-python3 -m mini_agent "问题" --compaction summary --max-context 20000   # 压缩方式：trim（默认）/ clear / summary
+python3 -m mini_agent "问题" --compaction summary --max-context 20000   # 压缩方式：clear（默认）/ trim / summary
 python3 -m mini_agent.trace runs/traces/某个文件.json [--full]  # 逐步回放一次运行
 python -m pytest -q
 python3 -m mini_agent.evaluate --repeat 3     # 用题库评测；--cmd 可以评测其他实现
